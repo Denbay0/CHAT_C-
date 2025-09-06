@@ -8,7 +8,13 @@ namespace lanchat {
 void print_usage(const char* argv0){
   std::cout <<
     "LAN Chat Server\n"
-    "Usage: " << argv0 << " [--bind 0.0.0.0] [--port 5555] [--data ./data] [--secret KEY] [--hist 20]\n";
+    "Usage: " << argv0 <<
+    " [--bind 0.0.0.0]"
+    " [--port 5555]"
+    " [--data ./data]"
+    " [--db ./data/lanchat.db]"   // <— NEW
+    " [--secret KEY]"
+    " [--hist 20]\n";
 }
 
 void parse_args(int argc, char** argv, Config& cfg){
@@ -21,6 +27,7 @@ void parse_args(int argc, char** argv, Config& cfg){
     if (a=="--bind") cfg.bind_addr = next("missing --bind value");
     else if (a=="--port") cfg.port = (uint16_t)std::stoi(next("missing --port value"));
     else if (a=="--data") cfg.data_dir = next("missing --data value");
+    else if (a=="--db") cfg.db_path = next("missing --db value");            // <— NEW
     else if (a=="--secret") cfg.secret = next("missing --secret value");
     else if (a=="--hist") cfg.history_on_join = (size_t)std::stoul(next("missing --hist value"));
     else if (a=="-h" || a=="--help"){ print_usage(argv[0]); std::exit(0); }

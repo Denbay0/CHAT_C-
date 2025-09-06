@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstring>
 #include <csignal>
+#include <filesystem>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -23,8 +24,10 @@ bool Server::start(){
   WSADATA wsa; if (WSAStartup(MAKEWORD(2,2), &wsa)!=0){ std::cerr<<"WSAStartup failed\n"; return false; }
 #endif
 
-  if (!storage_.open(cfg_.data_dir)){
-    std::cerr<<"Cannot open data dir/log\n";
+  // Откроем БД (файл создастся при необходимости)
+  std::filesystem::create_directories(std::filesystem::path(cfg_.db_path).parent_path());
+  if (!db_.open(cfg_.db_path)){
+    std::cerr<<"Cannot open DB: "<<cfg_.db_path<<"\n";
     return false;
   }
 
@@ -46,12 +49,13 @@ bool Server::start(){
   }
 
 #ifndef _WIN32
-  std::signal(SIGINT, [](int){ /* noop, handled by external */ });
+  std::signal(SIGINT, [](int){ /* noop */ });
   std::signal(SIGTERM, [](int){ /* noop */ });
 #endif
 
   std::thread([this]{ accept_loop(); }).detach();
-  std::cout<<"Server listening on "<<cfg_.bind_addr<<":"<<cfg_.port<<"\n";
+  std::cout<<"Server listening on "<<cfg_.bind_addr<<":"<<cfg_.port
+           <<" | DB="<<cfg_.db_path<<"\n";
   return true;
 }
 
@@ -82,16 +86,17 @@ void Server::accept_loop(){
 }
 
 bool Server::send_history(socket_t s){
-  auto snapshot = storage_.last(cfg_.history_on_join);
-  for (const auto& m : snapshot){
-    std::string p = make_broadcast(m.ts_ms, m.user, m.text);
+  // Теперь история берётся из БД (последние N глобальных сообщений)
+  auto rows = db_.last_messages(cfg_.history_on_join, /*recipient*/std::nullopt);
+  for (const auto& r : rows){
+    std::string p = make_broadcast(r.ts_ms, r.user, r.text);
     if (!send_frame(s, MSG_BROADCAST, p)) return false;
   }
   return true;
 }
 
 void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
-  // ожидание HELLO
+  // 1) HELLO
   uint8_t hdr[5];
   if (!read_exact(cli->sock, hdr, 5)) goto done;
   if (hdr[0] != HELLO){ send_error(cli->sock, "Expected HELLO"); goto done; }
@@ -100,16 +105,20 @@ void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
     if (len==0 || len>1024){ send_error(cli->sock, "Bad HELLO"); goto done; }
     std::string username(len, '\0');
     if (!read_exact(cli->sock, username.data(), len)) goto done;
-    // trim CR/LF
     username.erase(std::remove_if(username.begin(), username.end(),
                    [](unsigned char c){ return c=='\r'||c=='\n'; }), username.end());
     if (username.empty()){ send_error(cli->sock, "Empty username"); goto done; }
     cli->username = username;
+    // регистрируем/получаем пользователя в БД
+    cli->user_id = self->db_.ensure_user(cli->username);
+    if (cli->user_id < 0){ send_error(cli->sock, "DB error"); goto done; }
   }
   if (!send_ok(cli->sock)) goto done;
+
+  // 2) История
   if (!self->send_history(cli->sock)) goto done;
 
-  // основной цикл
+  // 3) Основной цикл
   while(!self->stop_.load()){
     if (!read_exact(cli->sock, hdr, 5)) break;
     uint8_t type = hdr[0];
@@ -121,7 +130,7 @@ void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
     if (type == MSG){
       self->on_message(cli, payload);
     } else {
-      // неизвестные типы игнорируем; можно послать ERR при желании
+      // игнор
     }
   }
 
@@ -136,17 +145,21 @@ done:
 }
 
 void Server::on_message(const std::shared_ptr<ClientConn>& cli, const std::string& text){
+  // формируем запись
   Message m;
   m.ts_ms = now_ms();
-  m.user = cli->username;
-  m.text = text;
-  // подпись: ts|user|text|secret
+  m.user  = cli->username;
+  m.text  = text;
   std::string sig = std::to_string(m.ts_ms) + "|" + m.user + "|" + m.text + "|" + cfg_.secret;
   m.hash_hex = hex64(fnv1a64(sig));
 
+  // в БД (общий чат => recipient_id = NULL)
+  db_.insert_message(cli->user_id, std::nullopt, m.ts_ms, m.text, m.hash_hex);
+
+  // в оперативный буфер (для быстрых рассылок, опционально)
   storage_.append(m);
 
-  // рассылаем
+  // рассылка
   std::string payload = make_broadcast(m.ts_ms, m.user, m.text);
   std::lock_guard<std::mutex> lk(clients_mx_);
   for (auto it = clients_.begin(); it != clients_.end(); ){
