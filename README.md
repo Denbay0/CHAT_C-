@@ -28,3 +28,26 @@
 4) deactivate(выход из окружения)
 
 
+server/
+└─ src/
+   ├─ app/            — точка входа
+   │  └─ main.cpp
+   ├─ config/         — конфиг, автоконфиг
+   │  ├─ config.hpp
+   │  └─ config.cpp
+   ├─ net/            — сеть и протокол
+   │  ├─ server.hpp
+   │  ├─ server.cpp
+   │  ├─ protocol.hpp
+   │  └─ protocol.cpp
+   ├─ storage/        — хранение истории и пользователей
+   │  ├─ storage.hpp
+   │  └─ storage.cpp
+   ├─ crypto/         — AES-GCM (Windows CNG)
+   │  ├─ crypto.hpp
+   │  └─ crypto.cpp
+   ├─ hash/           — лёгкий хеш сообщений
+   │  ├─ hash.hpp
+   │  └─ hash.cpp
+   └─ util/           — утилиты и кросс-платформенные сокеты
+      └─ utils.hpp
