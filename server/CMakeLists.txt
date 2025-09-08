@@ -11,11 +11,12 @@ add_executable(lanchat_server
   src/protocol.cpp
   src/storage.cpp
   src/server.cpp
+  src/crypto.cpp
 )
 
 target_include_directories(lanchat_server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 if (WIN32)
   target_compile_definitions(lanchat_server PRIVATE _WIN32_WINNT=0x0601)
-  target_link_libraries(lanchat_server PRIVATE ws2_32)
+  target_link_libraries(lanchat_server PRIVATE ws2_32 bcrypt)
 endif()

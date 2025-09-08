@@ -24,23 +24,37 @@ bool Server::start(){
   WSADATA wsa; if (WSAStartup(MAKEWORD(2,2), &wsa)!=0){ std::cerr<<"WSAStartup failed\n"; return false; }
 #endif
 
-  // Открыть storage и файл лога пользователей
+  // открыть storage и подготовить users.log
   if (!storage_.open(cfg_.data_dir)){
-    std::cerr<<"Cannot open data dir/log\n"; return false;
+    std::cerr<<"Cannot open data dir/log\n";
+    return false;
   }
+
+  // включить шифрование логов, если задан ключ
+  if (cfg_.enc_enabled){
+    std::vector<uint8_t> key32;
+    if (!hex_decode(cfg_.enc_key_hex, key32) || key32.size()!=32){
+      std::cerr<<"Invalid --enc-key-hex (must be 64 hex chars)\n";
+      return false;
+    }
+    storage_.enable_encryption(key32);
+  }
+
   {
     std::filesystem::create_directories(cfg_.data_dir);
     std::filesystem::path up = std::filesystem::path(cfg_.data_dir) / "users.log";
     users_log_.open(up.string(), std::ios::app);
   }
 
-  // Подгрузить историю и пользователей из messages.log
+  // подгрузить историю и пользователей из messages.log
   storage_.load_from_log(/*max_lines*/2000, users_);
 
-  // Сокет
+  // сетап сокета
   srv_ = socket(AF_INET, SOCK_STREAM, 0);
   if (srv_ == INVALID_SOCK){ std::cerr<<"socket() failed\n"; return false; }
-  int yes=1; setsockopt(srv_, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
+
+  int yes=1;
+  setsockopt(srv_, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
 
   sockaddr_in addr{}; addr.sin_family = AF_INET; addr.sin_port = htons(cfg_.port);
   if (inet_pton(AF_INET, cfg_.bind_addr.c_str(), &addr.sin_addr) != 1){
@@ -60,7 +74,8 @@ bool Server::start(){
 
   std::thread([this]{ accept_loop(); }).detach();
   std::cout<<"Server listening on "<<cfg_.bind_addr<<":"<<cfg_.port
-           <<" | data="<<cfg_.data_dir<<"\n";
+           <<" | data="<<cfg_.data_dir
+           <<(cfg_.enc_enabled ? " | log-encryption=AES-GCM" : "") << "\n";
   return true;
 }
 
@@ -117,10 +132,7 @@ void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
     // учтём пользователя и при необходимости допишем в users.log
     {
       bool need_write = false;
-      {
-        // set insert
-        if (self->users_.insert(cli->username).second) need_write = true;
-      }
+      if (self->users_.insert(cli->username).second) need_write = true;
       if (need_write && self->users_log_.is_open()){
         self->users_log_ << cli->username << "\n";
         self->users_log_.flush();
@@ -128,9 +140,11 @@ void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
     }
   }
   if (!send_ok(cli->sock)) goto done;
+
+  // история
   if (!self->send_history(cli->sock)) goto done;
 
-  // цикл чтения
+  // цикл чтения сообщений
   while(!self->stop_.load()){
     if (!read_exact(cli->sock, hdr, 5)) break;
     uint8_t type = hdr[0];
@@ -159,6 +173,7 @@ void Server::on_message(const std::shared_ptr<ClientConn>& cli, const std::strin
   m.ts_ms = now_ms();
   m.user  = cli->username;
   m.text  = text;
+
   std::string sig = std::to_string(m.ts_ms) + "|" + m.user + "|" + m.text + "|" + cfg_.secret;
   m.hash_hex = hex64(fnv1a64(sig));
 

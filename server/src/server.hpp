@@ -43,7 +43,7 @@ private:
 
   Storage storage_;
 
-  // пользователи (в памяти) и лог-файл с уникальными именами (опционально)
+  // пользователи в памяти + лог пользователей (опционально)
   std::unordered_set<std::string> users_;
   std::ofstream users_log_;
 };
