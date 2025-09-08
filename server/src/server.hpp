@@ -5,10 +5,11 @@
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include <unordered_set>
+#include <fstream>
 #include "utils.hpp"
 #include "storage.hpp"
 #include "config.hpp"
-#include "db.hpp"      // <— NEW
 
 namespace lanchat {
 
@@ -16,7 +17,6 @@ struct ClientConn {
   socket_t sock;
   std::string username;
   std::atomic<bool> alive{true};
-  int64_t user_id = -1;     // <— NEW
 };
 
 class Server {
@@ -42,7 +42,10 @@ private:
   std::vector<std::shared_ptr<ClientConn>> clients_;
 
   Storage storage_;
-  Db db_;                      // <— NEW
+
+  // пользователи (в памяти) и лог-файл с уникальными именами (опционально)
+  std::unordered_set<std::string> users_;
+  std::ofstream users_log_;
 };
 
 } // namespace lanchat

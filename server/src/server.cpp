@@ -24,18 +24,23 @@ bool Server::start(){
   WSADATA wsa; if (WSAStartup(MAKEWORD(2,2), &wsa)!=0){ std::cerr<<"WSAStartup failed\n"; return false; }
 #endif
 
-  // Откроем БД (файл создастся при необходимости)
-  std::filesystem::create_directories(std::filesystem::path(cfg_.db_path).parent_path());
-  if (!db_.open(cfg_.db_path)){
-    std::cerr<<"Cannot open DB: "<<cfg_.db_path<<"\n";
-    return false;
+  // Открыть storage и файл лога пользователей
+  if (!storage_.open(cfg_.data_dir)){
+    std::cerr<<"Cannot open data dir/log\n"; return false;
+  }
+  {
+    std::filesystem::create_directories(cfg_.data_dir);
+    std::filesystem::path up = std::filesystem::path(cfg_.data_dir) / "users.log";
+    users_log_.open(up.string(), std::ios::app);
   }
 
+  // Подгрузить историю и пользователей из messages.log
+  storage_.load_from_log(/*max_lines*/2000, users_);
+
+  // Сокет
   srv_ = socket(AF_INET, SOCK_STREAM, 0);
   if (srv_ == INVALID_SOCK){ std::cerr<<"socket() failed\n"; return false; }
-
-  int yes=1;
-  setsockopt(srv_, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
+  int yes=1; setsockopt(srv_, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
 
   sockaddr_in addr{}; addr.sin_family = AF_INET; addr.sin_port = htons(cfg_.port);
   if (inet_pton(AF_INET, cfg_.bind_addr.c_str(), &addr.sin_addr) != 1){
@@ -55,7 +60,7 @@ bool Server::start(){
 
   std::thread([this]{ accept_loop(); }).detach();
   std::cout<<"Server listening on "<<cfg_.bind_addr<<":"<<cfg_.port
-           <<" | DB="<<cfg_.db_path<<"\n";
+           <<" | data="<<cfg_.data_dir<<"\n";
   return true;
 }
 
@@ -86,17 +91,16 @@ void Server::accept_loop(){
 }
 
 bool Server::send_history(socket_t s){
-  // Теперь история берётся из БД (последние N глобальных сообщений)
-  auto rows = db_.last_messages(cfg_.history_on_join, /*recipient*/std::nullopt);
-  for (const auto& r : rows){
-    std::string p = make_broadcast(r.ts_ms, r.user, r.text);
+  auto snapshot = storage_.last(cfg_.history_on_join);
+  for (const auto& m : snapshot){
+    std::string p = make_broadcast(m.ts_ms, m.user, m.text);
     if (!send_frame(s, MSG_BROADCAST, p)) return false;
   }
   return true;
 }
 
 void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
-  // 1) HELLO
+  // HELLO
   uint8_t hdr[5];
   if (!read_exact(cli->sock, hdr, 5)) goto done;
   if (hdr[0] != HELLO){ send_error(cli->sock, "Expected HELLO"); goto done; }
@@ -109,16 +113,24 @@ void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
                    [](unsigned char c){ return c=='\r'||c=='\n'; }), username.end());
     if (username.empty()){ send_error(cli->sock, "Empty username"); goto done; }
     cli->username = username;
-    // регистрируем/получаем пользователя в БД
-    cli->user_id = self->db_.ensure_user(cli->username);
-    if (cli->user_id < 0){ send_error(cli->sock, "DB error"); goto done; }
+
+    // учтём пользователя и при необходимости допишем в users.log
+    {
+      bool need_write = false;
+      {
+        // set insert
+        if (self->users_.insert(cli->username).second) need_write = true;
+      }
+      if (need_write && self->users_log_.is_open()){
+        self->users_log_ << cli->username << "\n";
+        self->users_log_.flush();
+      }
+    }
   }
   if (!send_ok(cli->sock)) goto done;
-
-  // 2) История
   if (!self->send_history(cli->sock)) goto done;
 
-  // 3) Основной цикл
+  // цикл чтения
   while(!self->stop_.load()){
     if (!read_exact(cli->sock, hdr, 5)) break;
     uint8_t type = hdr[0];
@@ -129,9 +141,7 @@ void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
 
     if (type == MSG){
       self->on_message(cli, payload);
-    } else {
-      // игнор
-    }
+    } // остальное игнорируем
   }
 
 done:
@@ -145,7 +155,6 @@ done:
 }
 
 void Server::on_message(const std::shared_ptr<ClientConn>& cli, const std::string& text){
-  // формируем запись
   Message m;
   m.ts_ms = now_ms();
   m.user  = cli->username;
@@ -153,13 +162,8 @@ void Server::on_message(const std::shared_ptr<ClientConn>& cli, const std::strin
   std::string sig = std::to_string(m.ts_ms) + "|" + m.user + "|" + m.text + "|" + cfg_.secret;
   m.hash_hex = hex64(fnv1a64(sig));
 
-  // в БД (общий чат => recipient_id = NULL)
-  db_.insert_message(cli->user_id, std::nullopt, m.ts_ms, m.text, m.hash_hex);
-
-  // в оперативный буфер (для быстрых рассылок, опционально)
   storage_.append(m);
 
-  // рассылка
   std::string payload = make_broadcast(m.ts_ms, m.user, m.text);
   std::lock_guard<std::mutex> lk(clients_mx_);
   for (auto it = clients_.begin(); it != clients_.end(); ){

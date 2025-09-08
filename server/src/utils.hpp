@@ -25,6 +25,7 @@
 
 namespace lanchat {
 
+// --- Byte order helpers ---
 inline uint16_t to_be16(uint16_t v){ return htons(v); }
 inline uint32_t to_be32(uint32_t v){ return htonl(v); }
 
@@ -35,7 +36,8 @@ inline uint64_t to_be64(uint64_t v){
   return ((uint64_t)lo << 32) | hi;
 #else
   #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    return ( (uint64_t)htonl((uint32_t)(v & 0xFFFFFFFFULL)) << 32 ) | htonl((uint32_t)(v >> 32));
+    return ((uint64_t)htonl((uint32_t)(v & 0xFFFFFFFFULL)) << 32) |
+           htonl((uint32_t)(v >> 32));
   #else
     return v;
   #endif
@@ -50,21 +52,25 @@ inline uint64_t from_be64(uint64_t v){
   return ((uint64_t)hi << 32) | lo;
 #else
   #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    return ( (uint64_t)ntohl((uint32_t)(v & 0xFFFFFFFFULL)) << 32 ) | ntohl((uint32_t)(v >> 32));
+    return ((uint64_t)ntohl((uint32_t)(v & 0xFFFFFFFFULL)) << 32) |
+           ntohl((uint32_t)(v >> 32));
   #else
     return v;
   #endif
 #endif
 }
 
+// --- Time helper ---
 inline uint64_t now_ms(){
   using namespace std::chrono;
-  return duration_cast<milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+  return duration_cast<milliseconds>(
+    std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
+// --- String helpers ---
 inline std::string escape_tsv(const std::string& in){
   std::string out; out.reserve(in.size());
-  for(char c: in){
+  for (char c: in){
     if (c=='\t') out += "\\t";
     else if (c=='\n') out += "\\n";
     else if (c=='\\') out += "\\\\";
@@ -73,6 +79,23 @@ inline std::string escape_tsv(const std::string& in){
   return out;
 }
 
+// ✅ Новый метод: обратное преобразование
+inline std::string unescape_tsv(const std::string& in){
+  std::string out; out.reserve(in.size());
+  for (size_t i=0; i<in.size(); ++i){
+    char c = in[i];
+    if (c=='\\' && i+1<in.size()){
+      char n = in[i+1];
+      if (n=='t'){ out.push_back('\t'); ++i; continue; }
+      if (n=='n'){ out.push_back('\n'); ++i; continue; }
+      if (n=='\\'){ out.push_back('\\'); ++i; continue; }
+    }
+    out.push_back(c);
+  }
+  return out;
+}
+
+// --- Socket helpers ---
 inline bool read_exact(socket_t s, void* buf, size_t n){
   char* p = static_cast<char*>(buf);
   size_t got=0;
