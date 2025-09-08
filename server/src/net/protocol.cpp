@@ -1,7 +1,7 @@
 #include "net/protocol.hpp"
-#include "util/utils.hpp"     // to_be32/from_be32, to_be64/from_be64
-#include <cstring>
+#include "util/utils.hpp" 
 
+#include <cstring>
 
 namespace lanchat {
 
@@ -35,4 +35,4 @@ std::string make_broadcast(uint64_t ts_ms, const std::string& user, const std::s
   return payload;
 }
 
-} // namespace lanchat
+}

@@ -1,11 +1,12 @@
 #include "crypto/crypto.hpp"
+
 #include <stdexcept>
-#include <string>
-#include <vector>
+#include <stdexcept>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
-#include <stdexcept>
+#include <string>
+#include <vector>
 #include <string>
 
 #ifdef _WIN32
@@ -14,7 +15,6 @@
   #include <bcrypt.h>
   #pragma comment(lib, "bcrypt.lib")
 #endif
-
 
 
 namespace lanchat {
@@ -133,7 +133,6 @@ std::vector<uint8_t> aes_gcm_decrypt_win(const std::vector<uint8_t>& key32,
 
 #else
 
-// не-Windows заглушки, чтобы проект собирался
 GcmBlob aes_gcm_encrypt_win(const std::vector<uint8_t>&, const std::vector<uint8_t>&, const std::vector<uint8_t>&){
   throw std::runtime_error("AES-GCM (Windows CNG) not available on this platform");
 }
@@ -143,4 +142,4 @@ std::vector<uint8_t> aes_gcm_decrypt_win(const std::vector<uint8_t>&, const GcmB
 
 #endif
 
-} // namespace lanchat
+}
