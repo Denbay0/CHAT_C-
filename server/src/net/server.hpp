@@ -7,9 +7,10 @@
 #include <thread>
 #include <unordered_set>
 #include <fstream>
-#include "utils.hpp"
-#include "storage.hpp"
-#include "config.hpp"
+#include "util/utils.hpp"
+#include "storage/storage.hpp"
+
+#include "config/config.hpp"
 
 namespace lanchat {
 

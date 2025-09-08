@@ -1,5 +1,7 @@
-#include "protocol.hpp"
+#include "net/protocol.hpp"
+#include "util/utils.hpp"     // to_be32/from_be32, to_be64/from_be64
 #include <cstring>
+
 
 namespace lanchat {
 

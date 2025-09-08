@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include "utils.hpp"
+#include "util/utils.hpp"
 
 namespace lanchat {
 

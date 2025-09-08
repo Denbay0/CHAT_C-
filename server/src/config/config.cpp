@@ -1,5 +1,5 @@
 #include "config.hpp"
-#include "utils.hpp" // hex_encode/hex_decode (для генерации hex)
+#include "util/utils.hpp" // hex_encode/hex_decode (для генерации hex)
 #include <iostream>
 #include <string>
 #include <cstdlib>

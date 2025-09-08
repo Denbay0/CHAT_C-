@@ -1,4 +1,6 @@
-#include "hash.hpp"
+#include "hash/hash.hpp"
+#include <string>
+
 
 namespace lanchat {
 
