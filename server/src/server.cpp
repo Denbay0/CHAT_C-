@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstring>
 #include <csignal>
+#include <filesystem>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -23,16 +24,23 @@ bool Server::start(){
   WSADATA wsa; if (WSAStartup(MAKEWORD(2,2), &wsa)!=0){ std::cerr<<"WSAStartup failed\n"; return false; }
 #endif
 
+  // Открыть storage и файл лога пользователей
   if (!storage_.open(cfg_.data_dir)){
-    std::cerr<<"Cannot open data dir/log\n";
-    return false;
+    std::cerr<<"Cannot open data dir/log\n"; return false;
+  }
+  {
+    std::filesystem::create_directories(cfg_.data_dir);
+    std::filesystem::path up = std::filesystem::path(cfg_.data_dir) / "users.log";
+    users_log_.open(up.string(), std::ios::app);
   }
 
+  // Подгрузить историю и пользователей из messages.log
+  storage_.load_from_log(/*max_lines*/2000, users_);
+
+  // Сокет
   srv_ = socket(AF_INET, SOCK_STREAM, 0);
   if (srv_ == INVALID_SOCK){ std::cerr<<"socket() failed\n"; return false; }
-
-  int yes=1;
-  setsockopt(srv_, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
+  int yes=1; setsockopt(srv_, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
 
   sockaddr_in addr{}; addr.sin_family = AF_INET; addr.sin_port = htons(cfg_.port);
   if (inet_pton(AF_INET, cfg_.bind_addr.c_str(), &addr.sin_addr) != 1){
@@ -46,12 +54,13 @@ bool Server::start(){
   }
 
 #ifndef _WIN32
-  std::signal(SIGINT, [](int){ /* noop, handled by external */ });
+  std::signal(SIGINT, [](int){ /* noop */ });
   std::signal(SIGTERM, [](int){ /* noop */ });
 #endif
 
   std::thread([this]{ accept_loop(); }).detach();
-  std::cout<<"Server listening on "<<cfg_.bind_addr<<":"<<cfg_.port<<"\n";
+  std::cout<<"Server listening on "<<cfg_.bind_addr<<":"<<cfg_.port
+           <<" | data="<<cfg_.data_dir<<"\n";
   return true;
 }
 
@@ -91,7 +100,7 @@ bool Server::send_history(socket_t s){
 }
 
 void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
-  // ожидание HELLO
+  // HELLO
   uint8_t hdr[5];
   if (!read_exact(cli->sock, hdr, 5)) goto done;
   if (hdr[0] != HELLO){ send_error(cli->sock, "Expected HELLO"); goto done; }
@@ -100,16 +109,28 @@ void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
     if (len==0 || len>1024){ send_error(cli->sock, "Bad HELLO"); goto done; }
     std::string username(len, '\0');
     if (!read_exact(cli->sock, username.data(), len)) goto done;
-    // trim CR/LF
     username.erase(std::remove_if(username.begin(), username.end(),
                    [](unsigned char c){ return c=='\r'||c=='\n'; }), username.end());
     if (username.empty()){ send_error(cli->sock, "Empty username"); goto done; }
     cli->username = username;
+
+    // учтём пользователя и при необходимости допишем в users.log
+    {
+      bool need_write = false;
+      {
+        // set insert
+        if (self->users_.insert(cli->username).second) need_write = true;
+      }
+      if (need_write && self->users_log_.is_open()){
+        self->users_log_ << cli->username << "\n";
+        self->users_log_.flush();
+      }
+    }
   }
   if (!send_ok(cli->sock)) goto done;
   if (!self->send_history(cli->sock)) goto done;
 
-  // основной цикл
+  // цикл чтения
   while(!self->stop_.load()){
     if (!read_exact(cli->sock, hdr, 5)) break;
     uint8_t type = hdr[0];
@@ -120,9 +141,7 @@ void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
 
     if (type == MSG){
       self->on_message(cli, payload);
-    } else {
-      // неизвестные типы игнорируем; можно послать ERR при желании
-    }
+    } // остальное игнорируем
   }
 
 done:
@@ -138,15 +157,13 @@ done:
 void Server::on_message(const std::shared_ptr<ClientConn>& cli, const std::string& text){
   Message m;
   m.ts_ms = now_ms();
-  m.user = cli->username;
-  m.text = text;
-  // подпись: ts|user|text|secret
+  m.user  = cli->username;
+  m.text  = text;
   std::string sig = std::to_string(m.ts_ms) + "|" + m.user + "|" + m.text + "|" + cfg_.secret;
   m.hash_hex = hex64(fnv1a64(sig));
 
   storage_.append(m);
 
-  // рассылаем
   std::string payload = make_broadcast(m.ts_ms, m.user, m.text);
   std::lock_guard<std::mutex> lk(clients_mx_);
   for (auto it = clients_.begin(); it != clients_.end(); ){

@@ -1,3 +1,12 @@
+настройка окружения
+1) Компилятор C++ (MSVC) + Windows SDK
+   Установи Visual Studio Build Tools 2022 с нагрузкой Desktop development with C++.
+2) CMake 
+   winget install Kitware.CMake
+3) VS Code + расширения
+   Расширения: C/C++ (Microsoft) и CMake Tools.
+
+
 запуск сервера
 
 1) В командной палитре (Ctrl+Shift+P) выбери CMake: Build.
