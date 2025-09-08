@@ -1,15 +1,15 @@
-#include "net/server.hpp"
-#include "net/protocol.hpp"
-#include "hash/hash.hpp"
-#include "util/utils.hpp"
 #include "storage/storage.hpp"
 #include "config/config.hpp"
+#include "net/protocol.hpp"
+#include "util/utils.hpp"
+#include "net/server.hpp"
+#include "hash/hash.hpp"
 
-#include <iostream>
+#include <filesystem>
 #include <algorithm>
+#include <iostream>
 #include <cstring>
 #include <csignal>
-#include <filesystem>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -27,13 +27,11 @@ bool Server::start(){
   WSADATA wsa; if (WSAStartup(MAKEWORD(2,2), &wsa)!=0){ std::cerr<<"WSAStartup failed\n"; return false; }
 #endif
 
-  // открыть storage и подготовить users.log
   if (!storage_.open(cfg_.data_dir)){
     std::cerr<<"Cannot open data dir/log\n";
     return false;
   }
 
-  // включить шифрование логов, если задан ключ
   if (cfg_.enc_enabled){
     std::vector<uint8_t> key32;
     if (!hex_decode(cfg_.enc_key_hex, key32) || key32.size()!=32){
@@ -49,10 +47,8 @@ bool Server::start(){
     users_log_.open(up.string(), std::ios::app);
   }
 
-  // подгрузить историю и пользователей из messages.log
   storage_.load_from_log(/*max_lines*/2000, users_);
 
-  // сетап сокета
   srv_ = socket(AF_INET, SOCK_STREAM, 0);
   if (srv_ == INVALID_SOCK){ std::cerr<<"socket() failed\n"; return false; }
 
@@ -118,7 +114,6 @@ bool Server::send_history(socket_t s){
 }
 
 void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
-  // HELLO
   uint8_t hdr[5];
   if (!read_exact(cli->sock, hdr, 5)) goto done;
   if (hdr[0] != HELLO){ send_error(cli->sock, "Expected HELLO"); goto done; }
@@ -132,7 +127,6 @@ void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
     if (username.empty()){ send_error(cli->sock, "Empty username"); goto done; }
     cli->username = username;
 
-    // учтём пользователя и при необходимости допишем в users.log
     {
       bool need_write = false;
       if (self->users_.insert(cli->username).second) need_write = true;
@@ -144,10 +138,8 @@ void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
   }
   if (!send_ok(cli->sock)) goto done;
 
-  // история
   if (!self->send_history(cli->sock)) goto done;
 
-  // цикл чтения сообщений
   while(!self->stop_.load()){
     if (!read_exact(cli->sock, hdr, 5)) break;
     uint8_t type = hdr[0];
@@ -158,7 +150,7 @@ void Server::client_thread(Server* self, std::shared_ptr<ClientConn> cli){
 
     if (type == MSG){
       self->on_message(cli, payload);
-    } // остальное игнорируем
+    }
   }
 
 done:
@@ -200,4 +192,4 @@ void Server::on_message(const std::shared_ptr<ClientConn>& cli, const std::strin
   }
 }
 
-} // namespace lanchat
+}

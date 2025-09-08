@@ -1,16 +1,15 @@
 #include "storage/storage.hpp"
-#include "crypto/crypto.hpp"  // aes_gcm_encrypt/decrypt
-#include "hash/hash.hpp"      // fnv1a64, hex64
-#include "util/utils.hpp"     // escape_tsv/unescape_tsv, hex_decode
+#include "crypto/crypto.hpp"
+#include "util/utils.hpp"  
+#include "hash/hash.hpp"  
 
-#include <mutex>
 #include <filesystem>
 #include <sstream>
 #include <fstream>
+#include <mutex>
 
 namespace lanchat {
 
-// "GCM:iv_hex:tag_hex:ct_hex"
 static bool parse_gcm_line(const std::string& s,
                            std::vector<uint8_t>& iv,
                            std::vector<uint8_t>& tag,
@@ -42,7 +41,6 @@ bool Storage::load_from_log(std::size_t max_lines, std::unordered_set<std::strin
   std::filesystem::path p = std::filesystem::path(data_dir_) / "messages.log";
   if (!std::filesystem::exists(p)) return true;
 
-  // читаем файл и держим только последние max_lines
   std::vector<std::string> lines;
   {
     std::ifstream in(p.string());
@@ -54,9 +52,7 @@ bool Storage::load_from_log(std::size_t max_lines, std::unordered_set<std::strin
     }
   }
 
-  // парсим и (если можем) расшифровываем
   for (const auto& line : lines){
-    // ожидаем 4 колонки: ts \t user \t textOrGCM \t hash
     std::vector<std::string> cols; cols.reserve(4);
     std::string cur; cur.reserve(line.size());
     for (size_t i=0; i<line.size(); ++i){
@@ -75,31 +71,27 @@ bool Storage::load_from_log(std::size_t max_lines, std::unordered_set<std::strin
     m.user = unescape_tsv(cols[1]);
 
     if (cols[2].rfind("GCM:", 0) == 0){
-      // зашифровано — пробуем расшифровать, если есть ключ
       if (!enc_enabled_ || enc_key_.size()!=32){
-        // нет ключа — пропустим такие записи (чтобы не засорять память непонятным текстом)
         continue;
       }
       std::vector<uint8_t> iv, tag, ct;
       if (!parse_gcm_line(cols[2], iv, tag, ct)) continue;
       GcmBlob blob{ std::move(iv), std::move(tag), std::move(ct) };
       try{
-        auto plain = aes_gcm_encrypt_win; // чтобы компилятор не ругался на неиспользуемые инклуды
+        auto plain = aes_gcm_encrypt_win;
         (void)plain;
         auto rec = aes_gcm_decrypt_win(enc_key_, blob);
         m.text.assign(rec.begin(), rec.end());
       }catch(...){
-        continue; // неверный ключ/повреждение — пропускаем
+        continue;
       }
     } else {
-      // обычный текст
       m.text = unescape_tsv(cols[2]);
     }
 
     m.hash_hex = cols[3];
     users_out.insert(m.user);
 
-    // в кольцевой буфер
     {
       std::lock_guard<std::mutex> lk(mx_);
       if (ring_.size() >= cap_) ring_.erase(ring_.begin());
@@ -110,14 +102,12 @@ bool Storage::load_from_log(std::size_t max_lines, std::unordered_set<std::strin
 }
 
 void Storage::append(const Message& m){
-  // в память
   {
     std::lock_guard<std::mutex> lk(mx_);
     if (ring_.size() >= cap_) ring_.erase(ring_.begin());
     ring_.push_back(m);
   }
 
-  // в файл: если есть ключ — шифруем поле text
   if (!log_.is_open()) return;
 
   if (enc_enabled_ && enc_key_.size()==32){
@@ -129,7 +119,6 @@ void Storage::append(const Message& m){
       log_.flush();
       return;
     }catch(...){
-      // если шифрование не удалось — пишем как plaintext (fallback)
     }
   }
 
@@ -146,4 +135,4 @@ std::vector<Message> Storage::last(std::size_t n){
   return std::vector<Message>(ring_.end()-n, ring_.end());
 }
 
-} // namespace lanchat
+}

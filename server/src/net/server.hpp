@@ -1,16 +1,18 @@
-#pragma once
+#ifndef LANCHAT_NET_SERVER_HPP
+#define LANCHAT_NET_SERVER_HPP
+
+#include "storage/storage.hpp"
+#include "config/config.hpp"
+#include "util/utils.hpp"
+
+#include <unordered_set>
+#include <fstream>
 #include <vector>
 #include <memory>
 #include <string>
 #include <atomic>
 #include <mutex>
 #include <thread>
-#include <unordered_set>
-#include <fstream>
-#include "util/utils.hpp"
-#include "storage/storage.hpp"
-
-#include "config/config.hpp"
 
 namespace lanchat {
 
@@ -44,9 +46,10 @@ private:
 
   Storage storage_;
 
-  // пользователи в памяти + лог пользователей (опционально)
   std::unordered_set<std::string> users_;
   std::ofstream users_log_;
 };
 
-} // namespace lanchat
+}
+
+#endif

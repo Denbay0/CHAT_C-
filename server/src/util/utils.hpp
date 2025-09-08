@@ -1,9 +1,11 @@
-#pragma once
+#ifndef LANCHAT_UTIL_UTILS_HPP
+#define LANCHAT_UTIL_UTILS_HPP
+
 #include <cstdint>
 #include <chrono>
 #include <string>
 #include <vector>
-#include <cerrno>   // для errno на *nix
+#include <cerrno>
 
 #ifdef _WIN32
   #include <winsock2.h>
@@ -14,10 +16,10 @@
   #define INVALID_SOCK INVALID_SOCKET
   #define SOCK_ERROR SOCKET_ERROR
 #else
-  #include <unistd.h>
   #include <sys/socket.h>
   #include <netinet/in.h>
   #include <arpa/inet.h>
+  #include <unistd.h>
   using socket_t = int;
   #define CLOSESOCK ::close
   #define GET_LAST_SOCK_ERR errno
@@ -27,7 +29,6 @@
 
 namespace lanchat {
 
-// ---------- Byte order helpers (BE <-> host) ----------
 inline uint16_t to_be16(uint16_t v){ return htons(v); }
 inline uint32_t to_be32(uint32_t v){ return htonl(v); }
 
@@ -64,7 +65,6 @@ inline uint64_t from_be64(uint64_t v){
 #endif
 }
 
-// ---------- HEX helpers ----------
 inline std::string hex_encode(const std::vector<uint8_t>& v){
   static const char* d = "0123456789abcdef";
   std::string s; s.resize(v.size()*2);
@@ -92,7 +92,6 @@ inline bool hex_decode(const std::string& hex, std::vector<uint8_t>& out){
   return true;
 }
 
-// ---------- TSV escape/unescape ----------
 inline std::string escape_tsv(const std::string& in){
   std::string out; out.reserve(in.size());
   for (char c: in){
@@ -119,14 +118,12 @@ inline std::string unescape_tsv(const std::string& in){
   return out;
 }
 
-// ---------- Time (ms since epoch) ----------
 inline uint64_t now_ms(){
   using namespace std::chrono;
   return duration_cast<milliseconds>(
     std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
-// ---------- Socket I/O helpers ----------
 inline bool read_exact(socket_t s, void* buf, size_t n){
   char* p = static_cast<char*>(buf);
   size_t got=0;
@@ -150,4 +147,6 @@ inline bool write_exact(socket_t s, const void* buf, size_t n){
   return true;
 }
 
-} // namespace lanchat
+}
+
+#endif

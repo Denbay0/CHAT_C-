@@ -1,11 +1,12 @@
+#include "util/utils.hpp"
 #include "config.hpp"
-#include "util/utils.hpp" // hex_encode/hex_decode (для генерации hex)
+
+#include <filesystem>
 #include <iostream>
-#include <string>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
-#include <filesystem>
+#include <string>
 #include <vector>
 
 #ifdef _WIN32
@@ -21,12 +22,10 @@ static std::string default_ini_path(){
   return std::string("data") + "/" + "server.ini";
 }
 
-// --- secure random → bytes ---
 static std::vector<uint8_t> secure_random_bytes(size_t n){
   std::vector<uint8_t> v(n, 0);
 #ifdef _WIN32
   if (BCryptGenRandom(nullptr, v.data(), (ULONG)v.size(), BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0){
-    // fallback: пусть уж заполняется чем есть (не должно срабатывать)
     for(size_t i=0;i<n;++i) v[i] = (uint8_t)rand();
   }
 #else
@@ -35,7 +34,7 @@ static std::vector<uint8_t> secure_random_bytes(size_t n){
     ur.read(reinterpret_cast<char*>(v.data()), (std::streamsize)n);
     if (ur.gcount() == (std::streamsize)n) return v;
   }
-  for(size_t i=0;i<n;++i) v[i] = (uint8_t)rand(); // худший fallback
+  for(size_t i=0;i<n;++i) v[i] = (uint8_t)rand();
 #endif
   return v;
 }
@@ -80,9 +79,6 @@ void parse_args(int argc, char** argv, Config& cfg){
   }
 }
 
-// --- ini helpers ---
-// Формат простейший: key=value, без секций.
-// Пустые строки и строки, начинающиеся с # или ; — игнор.
 static void trim(std::string& s){
   size_t a = s.find_first_not_of(" \t\r\n");
   size_t b = s.find_last_not_of(" \t\r\n");
@@ -139,36 +135,31 @@ bool save_config_file(const std::string& path, const Config& cfg){
 }
 
 void bootstrap_auto_config(int argc, char** argv, Config& cfg){
-  // 1) если ini уже есть — загрузим
+
   const std::string ini = default_ini_path();
   bool ini_loaded = load_config_file(ini, cfg);
 
-  // 2) если аргументы присутствуют — парсим, они перекрывают файл
   if (argc > 1){
     parse_args(argc, argv, cfg);
   }
 
-  // 3) если ini ещё не было или секрет/ключ не заданы — сгенерируем
   if (!ini_loaded){
-    // defaults уже в cfg; обеспечим директорию data
     std::filesystem::create_directories(cfg.data_dir);
   }
 
   if (cfg.secret == "changeme"){
     auto s = secure_random_bytes(16);
-    cfg.secret = hex_encode(s); // 32 hex
+    cfg.secret = hex_encode(s);
   }
 
   if (!cfg.enc_enabled || cfg.enc_key_hex.size()!=64){
     auto k = secure_random_bytes(32);
-    cfg.enc_key_hex = hex_encode(k); // 64 hex
+    cfg.enc_key_hex = hex_encode(k);
     cfg.enc_enabled = true;
   }
 
-  // 4) сохраним обратно ini (создастся на первом запуске или обновится)
   save_config_file(ini, cfg);
 
-  // 5) финально напечатаем (для пользователя)
   std::cout << "Config: bind=" << cfg.bind_addr
             << " port=" << cfg.port
             << " data=" << cfg.data_dir
@@ -177,4 +168,4 @@ void bootstrap_auto_config(int argc, char** argv, Config& cfg){
             << "\n";
 }
 
-} // namespace lanchat
+}

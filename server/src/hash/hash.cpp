@@ -1,6 +1,6 @@
 #include "hash/hash.hpp"
-#include <string>
 
+#include <string>
 
 namespace lanchat {
 
@@ -19,4 +19,4 @@ std::string hex64(uint64_t x){
   return s;
 }
 
-} // namespace lanchat
+}

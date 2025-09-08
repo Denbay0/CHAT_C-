@@ -21,7 +21,6 @@ static void sig_handler(int){ g_exit = true; }
 int main(int argc, char** argv){
   lanchat::Config cfg;
 
-  // ВАЖНО: теперь автоконфиг (создаст data/server.ini на первом запуске)
   lanchat::bootstrap_auto_config(argc, argv, cfg);
 
 #ifndef _WIN32

@@ -1,23 +1,20 @@
-#pragma once
+#ifndef LANCHAT_CRYPTO_CRYPTO_HPP
+#define LANCHAT_CRYPTO_CRYPTO_HPP
+
 #include <vector>
-#include <string>
 #include <cstdint>
-#include <optional>
+#include "storage/storage.hpp"
 
 namespace lanchat {
 
-struct GcmBlob {
-  std::vector<uint8_t> iv;   // 12 bytes
-  std::vector<uint8_t> tag;  // 16 bytes
-  std::vector<uint8_t> ct;   // ciphertext
-};
-
-// encrypt/decrypt. Если платформа не Windows или ключ пустой — бросают исключение (encrypt/decrypt) или не используются.
-GcmBlob aes_gcm_encrypt_win(const std::vector<uint8_t>& key32,
+GcmBlob aes_gcm_encrypt_win(const std::vector<uint8_t>& key,
                             const std::vector<uint8_t>& plain,
                             const std::vector<uint8_t>& aad = {});
-std::vector<uint8_t> aes_gcm_decrypt_win(const std::vector<uint8_t>& key32,
+
+std::vector<uint8_t> aes_gcm_decrypt_win(const std::vector<uint8_t>& key,
                                          const GcmBlob& blob,
                                          const std::vector<uint8_t>& aad = {});
 
-} // namespace lanchat
+}
+
+#endif
