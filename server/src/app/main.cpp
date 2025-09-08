@@ -1,5 +1,6 @@
-#include "config.hpp"
-#include "server.hpp"
+#include "config/config.hpp"
+#include "net/server.hpp"
+
 #include <iostream>
 #include <thread>
 #include <atomic>

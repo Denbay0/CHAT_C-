@@ -1,7 +1,10 @@
-#include "server.hpp"
-#include "protocol.hpp"
-#include "hash.hpp"
-#include "utils.hpp"
+#include "net/server.hpp"
+#include "net/protocol.hpp"
+#include "hash/hash.hpp"
+#include "util/utils.hpp"
+#include "storage/storage.hpp"
+#include "config/config.hpp"
+
 #include <iostream>
 #include <algorithm>
 #include <cstring>

@@ -1,4 +1,12 @@
-#include "crypto.hpp"
+#include "crypto/crypto.hpp"
+#include <stdexcept>
+#include <string>
+#include <vector>
+#include <iostream>
+#include <sstream>
+#include <iomanip>
+#include <stdexcept>
+#include <string>
 
 #ifdef _WIN32
   #define NOMINMAX
@@ -7,8 +15,7 @@
   #pragma comment(lib, "bcrypt.lib")
 #endif
 
-#include <stdexcept>
-#include <string>
+
 
 namespace lanchat {
 

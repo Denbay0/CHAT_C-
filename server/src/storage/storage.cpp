@@ -1,6 +1,9 @@
-#include "storage.hpp"
-#include "utils.hpp"
-#include "crypto.hpp"
+#include "storage/storage.hpp"
+#include "crypto/crypto.hpp"  // aes_gcm_encrypt/decrypt
+#include "hash/hash.hpp"      // fnv1a64, hex64
+#include "util/utils.hpp"     // escape_tsv/unescape_tsv, hex_decode
+
+#include <mutex>
 #include <filesystem>
 #include <sstream>
 #include <fstream>
