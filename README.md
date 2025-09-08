@@ -13,6 +13,11 @@
 2) После сборки бинарник появится в CHAT_C-/build/Debug/lanchat_server.exe.
 3) cd build/Debug
    .\lanchat_server.exe --bind 0.0.0.0 --port 5555 --data ..\..\data --secret "dev_secret"
+   
+4) если сборка не нужна то просто 
+   cd build/Debug
+   .\lanchat_server.exe
+
 
 запуск клиента 
 
