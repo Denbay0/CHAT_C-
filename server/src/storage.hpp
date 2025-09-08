@@ -3,6 +3,7 @@
 #include <vector>
 #include <mutex>
 #include <fstream>
+#include <unordered_set>
 #include <cstdint>
 
 namespace lanchat {
@@ -16,19 +17,38 @@ struct Message {
 
 class Storage {
 public:
-  Storage(std::size_t last_cap);
-  ~Storage();
+  explicit Storage(std::size_t last_cap);
 
+  // открыть data_dir и файл messages.log (создастся при необходимости)
   bool open(const std::string& data_dir);
+
+  // включить шифрование логов (Windows AES-GCM). key32.size()==32
+  void enable_encryption(const std::vector<uint8_t>& key32){
+    enc_enabled_ = true;
+    enc_key_ = key32;
+  }
+
+  // загрузить последние max_lines строк из messages.log в буфер,
+  // параллельно собрать множество пользователей
+  bool load_from_log(std::size_t max_lines, std::unordered_set<std::string>& users_out);
+
+  // добавить сообщение (в память и в файл)
   void append(const Message& m);
+
+  // последние n сообщений (из памяти)
   std::vector<Message> last(std::size_t n);
 
 private:
   std::mutex mx_;
   std::vector<Message> ring_;
   std::size_t cap_;
+
+  std::string data_dir_;
   std::ofstream log_;
+
+  // шифрование логов
+  bool enc_enabled_{false};
+  std::vector<uint8_t> enc_key_;
 };
 
 } // namespace lanchat
-

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <thread>
 #include <atomic>
+#include <chrono>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -18,7 +19,9 @@ static void sig_handler(int){ g_exit = true; }
 
 int main(int argc, char** argv){
   lanchat::Config cfg;
-  lanchat::parse_args(argc, argv, cfg);
+
+  // ВАЖНО: теперь автоконфиг (создаст data/server.ini на первом запуске)
+  lanchat::bootstrap_auto_config(argc, argv, cfg);
 
 #ifndef _WIN32
   std::signal(SIGINT, sig_handler);

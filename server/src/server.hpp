@@ -5,6 +5,8 @@
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include <unordered_set>
+#include <fstream>
 #include "utils.hpp"
 #include "storage.hpp"
 #include "config.hpp"
@@ -29,7 +31,6 @@ private:
   void accept_loop();
   static void client_thread(Server* self, std::shared_ptr<ClientConn> cli);
   void on_message(const std::shared_ptr<ClientConn>& cli, const std::string& text);
-
   bool send_history(socket_t s);
 
 private:
@@ -41,6 +42,10 @@ private:
   std::vector<std::shared_ptr<ClientConn>> clients_;
 
   Storage storage_;
+
+  // пользователи в памяти + лог пользователей (опционально)
+  std::unordered_set<std::string> users_;
+  std::ofstream users_log_;
 };
 
 } // namespace lanchat
