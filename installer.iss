@@ -4,7 +4,7 @@
 #define MyAppExeName "lanchat_server.exe"
 
 [Setup]
-AppId={{63E7C178-8F2E-4A9B-83B5-AAAADBEEFA35}
+AppId={63E7C178-8F2E-4A9B-83B5-AAAADBEEFA35}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
