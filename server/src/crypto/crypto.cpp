@@ -1,9 +1,9 @@
 #include "crypto/crypto.hpp"
 
+#include <stdexcept>
 #include <windows.h>
 #include <bcrypt.h>
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -11,10 +11,10 @@
 
 namespace crypto {
 
-static constexpr ULONG AES_KEYLEN_BYTES = 32; // AES-256
-static constexpr ULONG GCM_IV_LEN       = 12; // 96-bit nonce
-static constexpr ULONG GCM_TAG_LEN      = 16; // 128-bit tag
-static constexpr ULONG SALT_LEN         = 16; // 128-bit salt
+static constexpr ULONG AES_KEYLEN_BYTES = 32;
+static constexpr ULONG GCM_IV_LEN       = 12;
+static constexpr ULONG GCM_TAG_LEN      = 16;
+static constexpr ULONG SALT_LEN         = 16;
 static constexpr ULONG PBKDF2_ITERS     = 150000;
 
 struct AlgHandle {
@@ -183,7 +183,6 @@ static std::vector<uint8_t> decrypt_gcm_with_salt_blob(const std::string& secret
     return pt;
 }
 
-// ---- публичный API ----
 EncryptedBlob encrypt(const std::string& secret,
                       const std::vector<uint8_t>& plaintext) {
     EncryptedBlob out;
@@ -196,4 +195,4 @@ std::vector<uint8_t> decrypt(const std::string& secret,
     return decrypt_gcm_with_salt_blob(secret, blob);
 }
 
-} // namespace crypto
+}

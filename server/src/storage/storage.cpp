@@ -5,19 +5,17 @@
 
 #include <filesystem>
 #include <fstream>
-#include <mutex>
 #include <vector>
 #include <string>
+#include <mutex>
 
 namespace lanchat
 {
 
-// распознаём старый формат "GCM:..." — такие строки просто пропускаем
 static bool is_legacy_gcm_line(const std::string& s) {
   return s.rfind("GCM:", 0) == 0;
 }
 
-// новый формат: "BLOB:<hex(serialized blob)>"
 static bool parse_blob_hex(const std::string& s, std::vector<uint8_t>& out_blob) {
   if (s.rfind("BLOB:", 0) != 0) return false;
   const std::string hex = s.substr(5);
@@ -51,7 +49,6 @@ bool Storage::load_from_log(std::size_t max_lines,
   }
 
   for (const auto& line : lines) {
-    // ts \t user \t payload \t hash
     std::vector<std::string> cols; cols.reserve(4);
     std::string cur; cur.reserve(line.size());
     for (char c : line) {
@@ -69,7 +66,6 @@ bool Storage::load_from_log(std::size_t max_lines,
     const std::string& payload = cols[2];
 
     if (is_legacy_gcm_line(payload)) {
-      // старые зашифрованные записи — пропускаем
       continue;
     } else if (payload.rfind("BLOB:", 0) == 0) {
       if (!enc_enabled_) continue;
@@ -120,11 +116,9 @@ void Storage::append(const Message& m) {
       log_.flush();
       return;
     } catch (...) {
-      // fallback ниже
     }
   }
 
-  // plaintext fallback
   log_ << m.ts_ms << '\t'
        << escape_tsv(m.user) << '\t'
        << escape_tsv(m.text) << '\t'
@@ -138,4 +132,4 @@ std::vector<Message> Storage::last(std::size_t n) {
   return std::vector<Message>(ring_.end()-n, ring_.end());
 }
 
-} // namespace lanchat
+}
