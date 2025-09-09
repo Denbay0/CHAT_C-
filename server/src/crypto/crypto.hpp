@@ -1,20 +1,18 @@
-#ifndef LANCHAT_CRYPTO_CRYPTO_HPP
-#define LANCHAT_CRYPTO_CRYPTO_HPP
-
+#pragma once
+#include <string>
 #include <vector>
 #include <cstdint>
-#include "storage/storage.hpp"
 
-namespace lanchat {
+namespace crypto {
 
-GcmBlob aes_gcm_encrypt_win(const std::vector<uint8_t>& key,
-                            const std::vector<uint8_t>& plain,
-                            const std::vector<uint8_t>& aad = {});
+struct EncryptedBlob {
+    std::vector<uint8_t> data; // [magic|lens|salt|iv|cipher|tag]
+};
 
-std::vector<uint8_t> aes_gcm_decrypt_win(const std::vector<uint8_t>& key,
-                                         const GcmBlob& blob,
-                                         const std::vector<uint8_t>& aad = {});
+EncryptedBlob encrypt(const std::string& secret,
+                      const std::vector<uint8_t>& plaintext);
 
-}
+std::vector<uint8_t> decrypt(const std::string& secret,
+                             const std::vector<uint8_t>& blob);
 
-#endif
+} // namespace crypto
