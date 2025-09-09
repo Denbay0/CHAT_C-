@@ -3,27 +3,26 @@
 #define MyAppPublisher "Denbay0"
 #define MyAppExeName "lanchat_server.exe"
 
-AppId={63E7C178-8F2E-4A9B-83B5-AAAADBEEFA35}
+[Setup]
+AppId={{63E7C178-8F2E-4A9B-83B5-AAAADBEEFA35}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-
 DefaultDirName={autopf}\LanChat Server
 DefaultGroupName=LanChat Server
-
 OutputDir=dist
 OutputBaseFilename=LanChatServerSetup
-
 ArchitecturesInstallIn64BitMode=x64
 Compression=lzma
 SolidCompression=yes
-
 PrivilegesRequired=admin
 AllowNoIcons=yes
 
+[Languages]
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "en"; MessagesFile: "compiler:Default.isl"
 
+[Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Dirs]
