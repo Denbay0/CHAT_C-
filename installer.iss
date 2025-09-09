@@ -1,5 +1,5 @@
 #define MyAppName "LanChat Server"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "Denbay0"
 #define MyAppExeName "lanchat_server.exe"
 
