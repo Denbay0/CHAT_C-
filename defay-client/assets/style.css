@@ -1,0 +1,287 @@
+.light {
+    --bg: #ffffff;
+    --fg: #1e1e1e;
+    --header-bg: #f5f5f5;
+    --status-color: #888;
+    --toolbar-bg: #f8f8f8;
+    --chat-bg: #ffffff;
+    --composer-bg: #fafafa;
+    --bubble-bg: #e5f1fb;
+    --bubble-fg: #1e1e1e;
+    --highlight: #007aff;
+    --meta-color: #666;
+    --button-bg: #007aff;
+    --button-fg: #ffffff;
+    --input-border: #ccc;
+    --input-bg: #ffffff;
+    --dialog-bg: #ffffff;
+    --hint-color: #007aff;
+}
+
+.dark {
+    --bg: #1e1e1e;
+    --fg: #f5f5f5;
+    --header-bg: #2c2c2c;
+    --status-color: #aaa;
+    --toolbar-bg: #2c2c2c;
+    --chat-bg: #262626;
+    --composer-bg: #2c2c2c;
+    --bubble-bg: #3a3f4b;
+    --bubble-fg: #e8e8e8;
+    --highlight: #3399ff;
+    --meta-color: #aaa;
+    --button-bg: #3399ff;
+    --button-fg: #ffffff;
+    --input-border: #555;
+    --input-bg: #333;
+    --dialog-bg: #3a3f4b;
+    --hint-color: #4ea6f7;
+}
+
+/* Basic elements */
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: sans-serif;
+}
+
+.onboarding {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background-color: var(--bg);
+    color: var(--fg);
+}
+
+.onboarding .logo img {
+    width: 96px;
+    height: 96px;
+}
+
+.onboarding .form {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    width: 300px;
+}
+
+.onboarding .form label {
+    margin-bottom: 4px;
+}
+
+.onboarding .form input[type="text"],
+.onboarding .form input[type="number"] {
+    margin-bottom: 12px;
+    padding: 8px;
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    color: var(--fg);
+}
+
+.onboarding .form input[type="checkbox"] {
+    margin-right: 6px;
+}
+
+.onboarding .form button {
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--button-bg);
+    color: var(--button-fg);
+    cursor: pointer;
+    margin-top: 8px;
+}
+
+.onboarding .form .error {
+    color: red;
+    margin-bottom: 12px;
+}
+
+/* Main shell layout */
+.shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: var(--bg);
+    color: var(--fg);
+}
+
+header {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    background-color: var(--header-bg);
+}
+
+header .title {
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin-right: 1rem;
+}
+
+header .status {
+    font-size: 0.9rem;
+    color: var(--status-color);
+}
+
+header .spacer {
+    flex-grow: 1;
+}
+
+header button {
+    margin-left: 0.5rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--fg);
+}
+
+.toolbar {
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--toolbar-bg);
+}
+
+.toolbar input[type="text"] {
+    flex-grow: 1;
+    padding: 8px;
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    color: var(--fg);
+}
+
+.toolbar button {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--button-bg);
+    color: var(--button-fg);
+    cursor: pointer;
+}
+
+.toolbar .hint {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--hint-color);
+}
+
+.chat {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background-color: var(--chat-bg);
+}
+
+.bubble {
+    max-width: 75%;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background-color: var(--bubble-bg);
+    color: var(--bubble-fg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.bubble.hl {
+    outline: 2px solid var(--highlight);
+}
+
+.bubble .meta {
+    font-size: 0.7rem;
+    color: var(--meta-color);
+    margin-bottom: 2px;
+}
+
+.bubble .text {
+    white-space: pre-wrap;
+}
+
+.composer {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background-color: var(--composer-bg);
+}
+
+.composer textarea {
+    flex-grow: 1;
+    resize: vertical;
+    padding: 8px;
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    color: var(--fg);
+}
+
+.composer .actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.composer .actions button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--button-bg);
+    color: var(--button-fg);
+    cursor: pointer;
+}
+
+.composer .actions .flood.ok {
+    color: green;
+    font-size: 0.8rem;
+}
+
+.composer .actions .flood.warn {
+    color: red;
+    font-size: 0.8rem;
+}
+
+/* Modal dialog */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal .dialog {
+    background-color: var(--dialog-bg);
+    color: var(--fg);
+    padding: 20px;
+    border-radius: 8px;
+    width: 350px;
+    max-width: 90%;
+}
+
+.modal .dialog h2 {
+    margin-top: 0;
+}
+
+.modal .dialog .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.modal .dialog .actions {
+    text-align: right;
+}

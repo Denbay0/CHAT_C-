@@ -1,0 +1,11 @@
+{
+  "last_host": "127.0.0.1",
+  "last_port": 5555,
+  "last_nick": "aboba",
+  "auto_connect": false,
+  "theme": "Dark",
+  "ui_scale": 1.0,
+  "notifications_enabled": true,
+  "flood_limit_burst": 8,
+  "flood_limit_window_sec": 30
+}

@@ -1,0 +1,5 @@
+﻿2025-09-10T01:26:36.0399886Z  INFO defay_client::telemetry: Defay logging started | file: C:\develop\CHAT_C-\defay-client\DefayClient\Logs\defay-2025-09-10T01-26-36.0357895Z.log
+2025-09-10T01:26:36.0401243Z  INFO defay_client: Defay starting… app_dir=C:\develop\CHAT_C-\defay-client\DefayClient
+2025-09-10T01:26:36.0404415Z  WARN dioxus_cli_config: A library is trying to access the crate's configuration, but the dioxus CLI was not used to build the application.
+2025-09-10T01:26:36.0404328Z  INFO defay_client::state: state: event pump started
+2025-09-10T01:26:36.0404384Z  INFO defay_client::net: net: background task started
