@@ -1,0 +1,393 @@
+.light {
+    --bg: #ffffff;
+    --fg: #1e1e1e;
+    --header-bg: #f5f5f5;
+    --status-color: #888;
+    --toolbar-bg: #f8f8f8;
+    --chat-bg: #ffffff;
+    --composer-bg: #fafafa;
+    --bubble-bg: #e5f1fb;
+    --bubble-fg: #1e1e1e;
+    --highlight: #007aff;
+    --meta-color: #666;
+    --button-bg: #007aff;
+    --button-fg: #ffffff;
+    --input-border: #ccc;
+    --input-bg: #ffffff;
+    --dialog-bg: #ffffff;
+    --hint-color: #007aff;
+    --bg-soft: #f5f5f5;
+    --panel: #ffffff;
+    --text: #1e1e1e;
+    --muted: #666;
+    --primary: #007aff;
+    --primary-2: #005bb5;
+    --danger: #ff5b6b;
+    --ok: #19c37d;
+    --border: #ccc;
+    --radius: 0.875rem;
+    --gap: 0.75rem;
+    --shadow: 0 0.375rem 2rem rgba(0,0,0,.15), 0 0.125rem 0.5rem rgba(0,0,0,.08);
+}
+
+.dark {
+    --bg: #1e1e1e;
+    --fg: #f5f5f5;
+    --header-bg: #2c2c2c;
+    --status-color: #aaa;
+    --toolbar-bg: #2c2c2c;
+    --chat-bg: #262626;
+    --composer-bg: #2c2c2c;
+    --bubble-bg: #3a3f4b;
+    --bubble-fg: #e8e8e8;
+    --highlight: #3399ff;
+    --meta-color: #aaa;
+    --button-bg: #3399ff;
+    --button-fg: #ffffff;
+    --input-border: #555;
+    --input-bg: #333;
+    --dialog-bg: #3a3f4b;
+    --hint-color: #4ea6f7;
+    --bg-soft: #141821;
+    --panel: #1a1f2b;
+    --text: #e6e9ef;
+    --muted: #9aa3b2;
+    --primary: #5b9cff;
+    --primary-2: #3f79e0;
+    --danger: #ff5b6b;
+    --ok: #19c37d;
+    --border: #262c3a;
+    --radius: 0.875rem;
+    --gap: 0.75rem;
+    --shadow: 0 0.375rem 2rem rgba(0,0,0,.35), 0 0.125rem 0.5rem rgba(0,0,0,.2);
+}
+
+/* Basic elements */
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+}
+body {
+    font-family: sans-serif;
+    background-color: var(--bg);
+    color: var(--fg);
+}
+
+.onboarding {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background-color: var(--bg);
+    color: var(--fg);
+}
+
+ .onboarding .logo img {
+    width: 6rem;
+    height: 6rem;
+ }
+
+ .onboarding .form {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    width: 18.75rem;
+ }
+
+ .onboarding .form label {
+    margin-bottom: 0.25rem;
+ }
+
+ .onboarding .form input[type="text"],
+ .onboarding .form input[type="number"] {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
+    border: 1px solid var(--input-border);
+    border-radius: 0.25rem;
+    background-color: var(--input-bg);
+    color: var(--fg);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+ }
+
+ .onboarding .form input[type="checkbox"] {
+    margin-right: 0.375rem;
+ }
+
+ .onboarding .form button {
+    margin-top: 0.5rem;
+ }
+
+.onboarding .form .error {
+    color: red;
+    margin-bottom: 0.75rem;
+}
+
+/* Main app layout */
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: var(--bg);
+    color: var(--fg);
+}
+
+header {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background-color: var(--header-bg);
+}
+
+header .title {
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+
+header .status {
+    margin-left: 1rem;
+    font-size: 0.9rem;
+    color: var(--status-color);
+}
+
+header .spacer {
+    flex-grow: 1;
+}
+
+.toolbar {
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: var(--toolbar-bg);
+}
+
+.toolbar input[type="text"] {
+    flex-grow: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--input-border);
+    border-radius: 0.25rem;
+    background-color: var(--input-bg);
+    color: var(--fg);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.toolbar .hint {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--hint-color);
+}
+
+.chat {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    background-color: var(--chat-bg);
+}
+
+.chat .list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.bubble {
+    max-width: 75%;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.625rem;
+    background-color: var(--bubble-bg);
+    color: var(--bubble-fg);
+    box-shadow: 0 0.0625rem 0.125rem rgba(0, 0, 0, 0.1);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bubble.hl {
+    outline: 2px solid var(--highlight);
+}
+
+.bubble.self {
+    align-self: flex-end;
+    background: linear-gradient(135deg, var(--button-bg), var(--highlight));
+    color: var(--button-fg);
+}
+
+.bubble .meta {
+    font-size: 0.7rem;
+    color: var(--meta-color);
+    margin-bottom: 0.125rem;
+}
+
+.bubble .text {
+    white-space: pre-wrap;
+}
+
+.bubble .time {
+    font-size: 0.7rem;
+    color: var(--meta-color);
+    margin-top: 0.25rem;
+    text-align: right;
+}
+
+.composer {
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background-color: var(--composer-bg);
+}
+
+.composer textarea {
+    flex-grow: 1;
+    resize: vertical;
+    padding: 0.5rem;
+    border: 1px solid var(--input-border);
+    border-radius: 0.25rem;
+    background-color: var(--input-bg);
+    color: var(--fg);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.composer .actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.flood.ok {
+    color: green;
+    font-size: 0.8rem;
+}
+
+.flood.warn {
+    color: red;
+    font-size: 0.8rem;
+}
+
+/* Modal dialog */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal .dialog {
+    background-color: var(--dialog-bg);
+    color: var(--fg);
+    padding: 1.25rem;
+    border-radius: 0.5rem;
+    width: 21.875rem;
+    max-width: 90%;
+}
+
+.modal .dialog h2 {
+    margin-top: 0;
+}
+
+.modal .dialog .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.modal .dialog .actions {
+    text-align: right;
+}
+
+/* Buttons */
+.btn {
+    height: 2.125rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    border-radius: 0.625rem;
+    cursor: pointer;
+    transition: transform .06s ease, border-color .2s ease, background .2s ease;
+}
+.btn:hover { border-color: #2f3850; transform: translateY(-1px); }
+.btn:active { transform: scale(0.97); }
+.btn.primary { background: linear-gradient(180deg, var(--primary), var(--primary-2)); border-color: transparent; }
+.btn.danger { background: linear-gradient(180deg, #ff6b7a, #e04858); border-color: transparent; }
+.btn:disabled { opacity: .6; cursor: default; transform: none; }
+
+input[type="text"],
+input[type="number"],
+textarea {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+input[type="text"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+    border-color: var(--highlight);
+    box-shadow: 0 0 0 1px var(--highlight);
+    outline: none;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+@keyframes pop-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes scale-in {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes scale-out {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0; transform: scale(0.9); }
+}
+
+@keyframes slide-right {
+    from { opacity: 0; transform: translateX(20px) scale(0.95); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes slide-left {
+    from { opacity: 0; transform: translateX(-20px) scale(0.95); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* Animation utility classes */
+.fade-in { animation: fade-in 0.4s ease forwards; will-change: opacity, transform; }
+.fade-out { animation: fade-out 0.3s ease forwards; will-change: opacity; }
+.slide-right { animation: slide-right 0.3s ease forwards; will-change: opacity, transform; }
+.slide-left { animation: slide-left 0.3s ease forwards; will-change: opacity, transform; }
+.scale-in { animation: scale-in 0.3s ease forwards; will-change: opacity, transform; }
+.scale-out { animation: scale-out 0.3s ease forwards; will-change: opacity, transform; }
+
+/* Responsive layout */
+@media (max-width: 600px) {
+    .toolbar, .composer {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 400px) {
+    header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .toolbar, .composer {
+        gap: 0.25rem;
+    }
+}
