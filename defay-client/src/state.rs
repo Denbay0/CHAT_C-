@@ -1,7 +1,7 @@
 use crate::net::{NetCmd, NetEvent, NetHandle};
+use chrono::Local;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use chrono::{Local};
-use tokio::sync::mpsc;
 
 #[derive(Clone, Debug)]
 pub struct ChatMessage {
@@ -20,11 +20,14 @@ pub struct AppState {
     pub status_text: Mutex<String>,
     pub net: NetHandle,
     pub rate: Arc<crate::ratelimit::TokenBucket>,
+    pub window_focused: AtomicBool,
+    pub msg_tx: tokio::sync::watch::Sender<u64>,
 }
 
 pub fn make_runtime(cfg: crate::config::AppConfig, _paths: &crate::config::Paths) -> Runtime {
     let net = crate::net::start_net_runtime();
 
+    let (msg_tx, _msg_rx) = tokio::sync::watch::channel(0u64);
     let st = Arc::new(AppState {
         rate: Arc::new(crate::ratelimit::TokenBucket::new(
             cfg.flood_limit_burst,
@@ -35,9 +38,10 @@ pub fn make_runtime(cfg: crate::config::AppConfig, _paths: &crate::config::Paths
         connected: Mutex::new(false),
         status_text: Mutex::new(String::from("Готов.")),
         net,
+        window_focused: AtomicBool::new(true),
+        msg_tx,
     });
 
-    // Поднимаем помпу событий сразу — это покрывает вызов start_background()
     start_event_pump(&st);
 
     Runtime(st)
@@ -67,17 +71,38 @@ fn start_event_pump(st: &Arc<AppState>) {
                         }
                         NetEvent::Disconnected { reason } => {
                             *st.connected.lock().unwrap() = false;
-                            *st.status_text.lock().unwrap() =
-                                format!("Отключено ({reason})");
+                            *st.status_text.lock().unwrap() = format!("Отключено ({reason})");
                             log::info!("state: disconnected ({reason})");
                         }
                         NetEvent::Error { msg } => {
                             *st.status_text.lock().unwrap() = format!("Ошибка: {msg}");
                             log::error!("state: error: {msg}");
                         }
-                        NetEvent::Message { ts_ms, username, text } => {
-                            st.messages.lock().unwrap()
-                                .push(ChatMessage { ts_ms, username, text });
+                        NetEvent::Message {
+                            ts_ms,
+                            username,
+                            text,
+                        } => {
+                            log::info!("state: message from {username}: {text}");
+                            let mut msgs = st.messages.lock().unwrap();
+                            msgs.push(ChatMessage {
+                                ts_ms,
+                                username: username.clone(),
+                                text: text.clone(),
+                            });
+                            let cnt = msgs.len() as u64;
+                            drop(msgs);
+                            let _ = st.msg_tx.send(cnt);
+                            #[cfg(windows)]
+                            {
+                                let notify = {
+                                    let cfg = st.cfg.lock().unwrap().notifications_enabled;
+                                    cfg && !st.window_focused.load(Ordering::SeqCst)
+                                };
+                                if notify {
+                                    let _ = crate::app::notify_win_toast(&username, &text);
+                                }
+                            }
                         }
                     }
                 } else {
@@ -88,40 +113,23 @@ fn start_event_pump(st: &Arc<AppState>) {
     });
 }
 
-/// >>> Добавлено: методы совместимости, которые ждёт твой app.rs
 impl AppState {
-    /// Раньше вызывалось из UI. Сейчас помпа уже запускается в `make_runtime`,
-    /// поэтому тут просто лог, чтобы не ломать вызовы.
     pub fn start_background(self: &Arc<Self>) {
         log::info!("state: start_background (noop — уже запущено)");
     }
 
-    /// Подключение без параметров — берём host/port/nick из конфига.
     pub async fn connect(self: &Arc<Self>) {
         let cfg = self.cfg.lock().unwrap().clone();
         *self.status_text.lock().unwrap() =
             format!("Подключение к {}:{}…", cfg.last_host, cfg.last_port);
-        let _ = self.net.tx_cmd.send(NetCmd::Connect {
-            host: cfg.last_host,
-            port: cfg.last_port,
-            nick: cfg.last_nick,
-        }).await;
+        let rt = Runtime(self.clone());
+        rt.connect(cfg.last_host, cfg.last_port, cfg.last_nick);
     }
 
-    /// Отправка сообщения (как раньше: async Result)
     pub async fn send_message(self: &Arc<Self>, text: String) -> anyhow::Result<()> {
-        // простой анти-флуд на основе токен-бакета
-        if !self.rate.try_take() {
-            *self.status_text.lock().unwrap() = "Слишком часто".into();
-            return Ok(());
-        }
-        self.net.tx_cmd
-            .send(NetCmd::SendText(text))
-            .await
-            .map_err(|e| anyhow::anyhow!(e.to_string()))
+        Runtime(self.clone()).send_text(text)
     }
 
-    /// Поиск по локальной истории
     pub fn search(self: &Arc<Self>, q: &str) -> Vec<ChatMessage> {
         let ql = q.trim().to_lowercase();
         if ql.is_empty() {
@@ -132,14 +140,12 @@ impl AppState {
             .unwrap()
             .iter()
             .filter(|m| {
-                m.username.to_lowercase().contains(&ql) ||
-                m.text.to_lowercase().contains(&ql)
+                m.username.to_lowercase().contains(&ql) || m.text.to_lowercase().contains(&ql)
             })
             .cloned()
             .collect()
     }
 
-    /// Форматирование таймстампа для UI
     pub fn format_ts(ts_ms: u64) -> String {
         use std::time::{Duration, UNIX_EPOCH};
         let st = UNIX_EPOCH + Duration::from_millis(ts_ms);
@@ -148,20 +154,27 @@ impl AppState {
     }
 }
 
-/// Утилиты — прокси для UI
 impl Runtime {
-    pub fn send_text(&self, text: String) {
+    pub fn send_text(&self, text: String) -> anyhow::Result<()> {
         if !self.0.rate.try_take() {
             *self.0.status_text.lock().unwrap() = "Слишком часто".into();
-            return;
+            return Ok(());
         }
-        let _ = self.0.net.tx_cmd.try_send(NetCmd::SendText(text));
+        log::info!("state: send_message {} bytes", text.len());
+        self.0
+            .net
+            .tx_cmd
+            .try_send(NetCmd::SendText(text))
+            .map_err(|e| anyhow::anyhow!(e.to_string()))
     }
 
     pub fn connect(&self, host: String, port: u16, nick: String) {
-        *self.0.status_text.lock().unwrap() =
-            format!("Подключение к {host}:{port}…");
-        let _ = self.0.net.tx_cmd.try_send(NetCmd::Connect { host, port, nick });
+        *self.0.status_text.lock().unwrap() = format!("Подключение к {host}:{port}…");
+        let _ = self
+            .0
+            .net
+            .tx_cmd
+            .try_send(NetCmd::Connect { host, port, nick });
     }
 
     pub fn disconnect(&self) {

@@ -1,7 +1,6 @@
-use std::time::{Duration, Instant};
 use parking_lot::Mutex;
+use std::time::{Duration, Instant};
 
-/// Simple token-bucket rate limiter.
 pub struct TokenBucket {
     capacity: u32,
     tokens: Mutex<Tokens>,
@@ -15,7 +14,6 @@ struct Tokens {
 }
 
 impl TokenBucket {
-    /// Create a new bucket with given burst capacity and refill window.
     pub fn new(burst: u32, window: Duration) -> Self {
         Self {
             capacity: burst,
@@ -28,15 +26,21 @@ impl TokenBucket {
         }
     }
 
-    /// Attempt to consume one token. Returns false if bucket is empty.
     pub fn try_take(&self) -> bool {
         let mut t = self.tokens.lock();
         let now = Instant::now();
-        // refill if necessary
-        if now.duration_since(t.last_refill) >= self.refill_every {
-            t.available = self.capacity;
-            t.last_refill = now;
+
+        let elapsed = now.duration_since(t.last_refill);
+        if elapsed >= self.refill_every {
+            let intervals =
+                (elapsed.as_secs_f64() / self.refill_every.as_secs_f64()).floor() as u32;
+            if intervals > 0 {
+                let added = intervals.saturating_mul(self.refill_amount);
+                t.available = (t.available + added).min(self.capacity);
+                t.last_refill += self.refill_every * intervals;
+            }
         }
+
         if t.available > 0 {
             t.available -= 1;
             true
@@ -45,7 +49,6 @@ impl TokenBucket {
         }
     }
 
-    /// Seconds until next token is available.
     pub fn seconds_to_next(&self) -> u64 {
         let t = self.tokens.lock();
         let now = Instant::now();
@@ -61,7 +64,6 @@ impl TokenBucket {
         }
     }
 
-    /// Number of available tokens remaining.
     pub fn available(&self) -> u32 {
         self.tokens.lock().available
     }

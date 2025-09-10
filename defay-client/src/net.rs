@@ -10,7 +10,11 @@ pub const T_MSG_BROADCAST: u8 = 0x12;
 
 #[derive(Debug, Clone)]
 pub enum NetCmd {
-    Connect { host: String, port: u16, nick: String },
+    Connect {
+        host: String,
+        port: u16,
+        nick: String,
+    },
     SendText(String),
     Disconnect,
     Stop,
@@ -19,16 +23,29 @@ pub enum NetCmd {
 #[derive(Debug, Clone)]
 pub enum NetEvent {
     Connected,
-    Disconnected { reason: String },
-    Error { msg: String },
-    Message { ts_ms: u64, username: String, text: String },
+    Disconnected {
+        reason: String,
+    },
+    Error {
+        msg: String,
+    },
+    Message {
+        ts_ms: u64,
+        username: String,
+        text: String,
+    },
 }
 
 #[derive(Debug)]
 pub struct NetHandle {
     pub tx_cmd: mpsc::Sender<NetCmd>,
-    // Receiver нельзя клонировать — держим его внутри Mutex<Option<_>> и «забираем» однажды в state.
     pub rx_evt: std::sync::Mutex<Option<mpsc::Receiver<NetEvent>>>,
+}
+
+impl Drop for NetHandle {
+    fn drop(&mut self) {
+        let _ = self.tx_cmd.try_send(NetCmd::Stop);
+    }
 }
 
 pub fn start_net_runtime() -> NetHandle {
@@ -47,27 +64,35 @@ pub fn start_net_runtime() -> NetHandle {
             let mut writer: Option<tokio::io::WriteHalf<TcpStream>> = None;
             let mut reader_task: Option<tokio::task::JoinHandle<()>> = None;
 
-            // Акуратное закрытие текущего соединения/ридера
-            let close_conn = |reason: &str, reader_task: &mut Option<tokio::task::JoinHandle<()>>, writer: &mut Option<tokio::io::WriteHalf<TcpStream>>| {
-                log::info!("net: close_conn({reason})");
-                if let Some(h) = reader_task.take() {
-                    h.abort();
-                }
-                if writer.take().is_some() {
-                    // drop(writer)
-                }
-            };
+            let close_conn =
+                |reason: &str,
+                 reader_task: &mut Option<tokio::task::JoinHandle<()>>,
+                 writer: &mut Option<tokio::io::WriteHalf<TcpStream>>| {
+                    log::info!("net: close_conn({reason})");
+                    if let Some(h) = reader_task.take() {
+                        h.abort();
+                    }
+                    if writer.take().is_some() {}
+                };
 
             loop {
                 match rx_cmd.recv().await {
                     None | Some(NetCmd::Stop) => {
                         close_conn("stop", &mut reader_task, &mut writer);
-                        let _ = tx_evt.send(NetEvent::Disconnected { reason: "stop".into() }).await;
+                        let _ = tx_evt
+                            .send(NetEvent::Disconnected {
+                                reason: "stop".into(),
+                            })
+                            .await;
                         break;
                     }
                     Some(NetCmd::Disconnect) => {
                         close_conn("user", &mut reader_task, &mut writer);
-                        let _ = tx_evt.send(NetEvent::Disconnected { reason: "user".into() }).await;
+                        let _ = tx_evt
+                            .send(NetEvent::Disconnected {
+                                reason: "user".into(),
+                            })
+                            .await;
                     }
                     Some(NetCmd::Connect { host, port, nick }) => {
                         close_conn("reconnect", &mut reader_task, &mut writer);
@@ -85,7 +110,8 @@ pub fn start_net_runtime() -> NetHandle {
                             Ok(stream) => {
                                 let (mut rd, mut wr) = tokio::io::split(stream);
 
-                                if let Err(e) = send_frame(&mut wr, T_HELLO, nick.as_bytes()).await {
+                                if let Err(e) = send_frame(&mut wr, T_HELLO, nick.as_bytes()).await
+                                {
                                     let _ = tx_evt
                                         .send(NetEvent::Error {
                                             msg: format!("send HELLO failed: {e}"),
@@ -142,6 +168,7 @@ pub fn start_net_runtime() -> NetHandle {
                     }
                     Some(NetCmd::SendText(text)) => {
                         if let Some(wr) = writer.as_mut() {
+                            log::info!("net: sending {} bytes", text.len());
                             if let Err(e) = send_frame(wr, T_MSG, text.as_bytes()).await {
                                 let _ = tx_evt
                                     .send(NetEvent::Error {
@@ -178,6 +205,7 @@ async fn send_frame<W: AsyncWriteExt + Unpin>(
     buf.extend_from_slice(&(payload.len() as u32).to_be_bytes());
     buf.extend_from_slice(payload);
     w.write_all(&buf).await?;
+    w.flush().await?;
     Ok(())
 }
 
@@ -201,7 +229,6 @@ async fn reader_loop<R: AsyncReadExt + Unpin>(
         let (typ, payload) = read_frame(&mut rd).await?;
         match typ {
             T_MSG_BROADCAST => {
-                // payload = ts_ms(8BE) + ulen(2BE) + username + mlen(4BE) + message
                 if payload.len() < 8 + 2 + 4 {
                     let _ = tx_evt
                         .send(NetEvent::Error {
@@ -239,6 +266,7 @@ async fn reader_loop<R: AsyncReadExt + Unpin>(
                     continue;
                 }
                 let text = String::from_utf8_lossy(&p[..mlen]).to_string();
+                log::info!("net: recv msg from {username} ({mlen} bytes)");
 
                 let _ = tx_evt
                     .send(NetEvent::Message {
@@ -248,9 +276,7 @@ async fn reader_loop<R: AsyncReadExt + Unpin>(
                     })
                     .await;
             }
-            T_OK => {
-                // игнорируем «промежуточные» OK
-            }
+            T_OK => {}
             T_ERR => {
                 let msg = String::from_utf8_lossy(&payload).to_string();
                 let _ = tx_evt.send(NetEvent::Error { msg }).await;

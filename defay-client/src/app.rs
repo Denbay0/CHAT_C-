@@ -1,19 +1,19 @@
 use crate::config::{self, Theme};
-use crate::state::{AppState, ChatMessage};
-use arboard::Clipboard;
+use crate::state::{AppState, ChatMessage, Runtime};
 use dioxus::events::Key;
 use dioxus::prelude::*;
+use dioxus_desktop::{
+    tao::event::{Event, WindowEvent},
+    use_wry_event_handler,
+};
 use once_cell::sync::OnceCell;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-const CSS: &str = include_str!("../assets/style.css");
-
-// Храним сразу Arc<AppState>
 static RUNTIME: OnceCell<(Arc<AppState>, config::Paths)> = OnceCell::new();
 
-pub fn launch_app(state: Arc<AppState>, paths: config::Paths) {
+pub fn set_runtime(state: Arc<AppState>, paths: config::Paths) {
     let _ = RUNTIME.set((state, paths));
-    dioxus::launch(App);
 }
 
 fn runtime() -> &'static (Arc<AppState>, config::Paths) {
@@ -28,16 +28,45 @@ pub fn App() -> Element {
     let mut show_settings = use_signal(|| false);
     let mut show_diag = use_signal(|| false);
     let input_text = use_signal(String::new);
+    let ui_scale = use_signal(|| runtime().0.cfg.lock().unwrap().ui_scale);
 
-    use_hook(|| {
+    let theme_class = {
+        let cfg = runtime().0.cfg.lock().unwrap().theme;
+        match cfg {
+            Theme::Light => "light".to_string(),
+            Theme::Dark => "dark".to_string(),
+            Theme::System => match dark_light::detect() {
+                dark_light::Mode::Dark => "dark".into(),
+                _ => "light".into(),
+            },
+        }
+    };
+
+    let state_for_focus = runtime().0.clone();
+    use_wry_event_handler(move |event, _| {
+        if let Event::WindowEvent {
+            event: WindowEvent::Focused(f),
+            ..
+        } = event
+        {
+            state_for_focus.window_focused.store(*f, Ordering::SeqCst);
+        }
+    });
+
+    use_effect(move || {
         let state = runtime().0.clone();
 
-        // 1) старт фоновых (net runner + event pump) — уже есть Tokio у Dioxus
+        log::info!("app: starting background services");
         state.start_background();
 
-        // 2) автоконнект
         let cfg = state.cfg.lock().unwrap().clone();
         if cfg.auto_connect && !cfg.last_nick.is_empty() {
+            log::info!(
+                "app: auto_connect to {}:{} as {}",
+                cfg.last_host,
+                cfg.last_port,
+                cfg.last_nick
+            );
             route.set(Route::Chat);
             spawn(async move {
                 state.connect().await;
@@ -46,26 +75,27 @@ pub fn App() -> Element {
     });
 
     rsx! {
-        style { "{CSS}" }
-        match route()
-        {
-            Route::Onboarding => rsx!(OnboardingScreen { route: route.clone() }),
-            Route::Chat => rsx!(
-                MainShell {
-                    route: route.clone(),
-                    show_settings: show_settings.clone(),
-                    show_diag: show_diag.clone(),
-                    search_query: search_query.clone(),
-                    search_results: search_results.clone(),
-                    input_text: input_text.clone(),
-                }
-                if *show_settings.read() {
-                    SettingsDialog { on_close: move |_| show_settings.set(false) }
-                }
-                if *show_diag.read() {
-                    DiagnosticsDialog { on_close: move |_| show_diag.set(false) }
-                }
-            )
+        div { class: "{theme_class}", style: "zoom: {ui_scale.read()}",
+            match route()
+            {
+                Route::Onboarding => rsx!(OnboardingScreen { route: route.clone() }),
+                Route::Chat => rsx!(
+                    MainShell {
+                        route: route.clone(),
+                        show_settings: show_settings.clone(),
+                        show_diag: show_diag.clone(),
+                        search_query: search_query.clone(),
+                        search_results: search_results.clone(),
+                        input_text: input_text.clone(),
+                    }
+                    if *show_settings.read() {
+                        SettingsDialog { on_close: move |_| show_settings.set(false), ui_scale: ui_scale.clone() }
+                    }
+                    if *show_diag.read() {
+                        DiagnosticsDialog { on_close: move |_| show_diag.set(false) }
+                    }
+                )
+            }
         }
     }
 }
@@ -89,6 +119,13 @@ fn OnboardingScreen(route: Signal<Route>) -> Element {
 
     let connect = move |_| {
         error_text.set(String::new());
+        log::info!(
+            "onboarding: connect pressed host={} port={} nick={} auto={}",
+            host.read(),
+            port.read(),
+            nick.read(),
+            auto.read()
+        );
         if nick.read().trim().is_empty() {
             error_text.set("Введите никнейм".into());
             return;
@@ -101,9 +138,11 @@ fn OnboardingScreen(route: Signal<Route>) -> Element {
 
         if let Err(e) = config::save(&paths.cfg_path, &new_cfg) {
             let msg = format!("Не удалось сохранить конфиг: {e}");
+            log::error!("onboarding: {msg}");
             error_text.set(msg);
             return;
         }
+        log::info!("onboarding: config saved, connecting");
         *state.cfg.lock().unwrap() = new_cfg.clone();
         route.set(Route::Chat);
         let st = state.clone();
@@ -113,7 +152,7 @@ fn OnboardingScreen(route: Signal<Route>) -> Element {
     };
 
     rsx! {
-        div { class: "onboarding",
+        div { class: "onboarding fade-in slide-right",
             div { class: "logo",
                 img { src: "assets/logo.png", alt: "Defay 1x9 logo" }
                 h1 { "Defay 1x9" }
@@ -147,14 +186,14 @@ fn OnboardingScreen(route: Signal<Route>) -> Element {
                     input {
                         r#type: "checkbox",
                         checked: "{auto}",
-                        oninput: move |e| auto.set(e.value().parse::<bool>().unwrap_or(false))
+                        oninput: move |e| auto.set(e.checked())
                     }
                     span { "Автоподключение при запуске" }
                 }
                 if !error_text.read().is_empty() {
                     div { class: "error", "{error_text}" }
                 }
-                button { class: "primary", onclick: connect, "Подключиться" }
+                button { class: "btn primary", onclick: connect, "Подключиться" }
             }
         }
     }
@@ -173,26 +212,33 @@ fn MainShell(
     let connected = *state.connected.lock().unwrap();
     let status = state.status_text.lock().unwrap().clone();
 
-    use std::cell::RefCell;
-    let state_for_send = state.clone();
-    let do_send = std::rc::Rc::new(RefCell::new(move |_| {
-        let msg = input_text.read().clone();
-        if msg.trim().is_empty() {
-            return;
-        }
-        let st = state_for_send.clone();
-        spawn(async move {
-            if let Err(err) = st.send_message(msg).await {
-                *st.status_text.lock().unwrap() = err.to_string();
+    use std::rc::Rc;
+    let send_closure: Rc<dyn Fn()> = {
+        let state_for_send = state.clone();
+        let input_signal = input_text.clone();
+        Rc::new(move || {
+            let msg = input_signal.read().clone();
+            if msg.trim().is_empty() {
+                return;
             }
-        });
-        input_text.set(String::new());
-    }));
+            log::info!("ui: sending message '{}' ({} bytes)", msg, msg.len());
+            let st = state_for_send.clone();
+            spawn(async move {
+                if let Err(err) = st.send_message(msg).await {
+                    log::error!("ui: send_message failed: {err}");
+                    *st.status_text.lock().unwrap() = err.to_string();
+                }
+            });
+            let mut sig = input_signal.clone();
+            sig.set(String::new());
+        })
+    };
 
     let state_for_search = state.clone();
     let do_search = move |_| {
         let q = search_query.read().clone();
         if q.trim().is_empty() {
+            log::info!("ui: cleared search");
             search_results.set(vec![]);
         } else {
             let found = state_for_search.search(&q);
@@ -201,18 +247,20 @@ fn MainShell(
                 .into_iter()
                 .filter_map(|fm| list.iter().position(|m| m.ts_ms == fm.ts_ms))
                 .collect();
+            log::info!("ui: search for '{q}' found {} results", indices.len());
             search_results.set(indices);
         }
     };
 
     rsx! {
-        div { class: "shell",
+        div { class: "app fade-in slide-left",
             header {
                 div { class: "title", "Defay 1x9" }
                 div { class: "status", if connected { "Подключено" } else { "{status}" } }
                 div { class: "spacer" }
-                button { onclick: move |_| show_settings.set(true), "Настройки" }
-                button { onclick: move |_| show_diag.set(true), "Диагностика" }
+                button { class: "btn danger", onclick: move |_| Runtime(state.clone()).disconnect(), "Отключиться" }
+                button { class: "btn", onclick: move |_| show_settings.set(true), "Настройки" }
+                button { class: "btn", onclick: move |_| show_diag.set(true), "Диагностика" }
             }
             div { class: "toolbar",
                 input {
@@ -220,7 +268,7 @@ fn MainShell(
                     value: "{search_query}",
                     oninput: move |e| search_query.set(e.value())
                 }
-                button { onclick: do_search, "Найти" }
+                button { class: "btn", onclick: do_search, "Найти" }
                 if !search_results.read().is_empty() {
                     span { class: "hint", "Найдено: {search_results.read().len()}" }
                 }
@@ -233,19 +281,26 @@ fn MainShell(
                     rows: "3",
                     placeholder: "Напишите сообщение…",
                     value: "{input_text}",
+                    oninput: move |e| input_text.set(e.value()),
                     onkeydown: {
-                        let do_send = do_send.clone();
+                        let send = send_closure.clone();
                         move |e| {
                             if e.key() == Key::Enter && !e.modifiers().shift() {
-                                do_send.borrow_mut()(());
+                                log::info!("ui: Enter pressed, sending message");
+                                (send)();
                             }
                         }
                     }
                 }
-                button { class: "primary", onclick: {
-                    let do_send = do_send.clone();
-                    move |_| do_send.borrow_mut()(())
-                }, "Отправить" }
+                button {
+                    class: "btn primary",
+                    onclick: {
+                        let send = send_closure.clone();
+                        move |_| (send)()
+                    },
+                    "Отправить"
+                }
+                FloodIndicator {}
             }
         }
     }
@@ -254,30 +309,75 @@ fn MainShell(
 #[component]
 fn ChatList(matches: Vec<usize>) -> Element {
     let state = runtime().0.clone();
+    let msg_count = use_signal(|| 0_u64);
+    let should_scroll = use_signal(|| false);
+    {
+        let state = state.clone();
+        let mc = msg_count.clone();
+        let should_scroll = should_scroll.clone();
+        use_effect(move || {
+            let mut rx = state.msg_tx.subscribe();
+            let mut mc = mc.clone();
+            let st = state.clone();
+            let mut should_scroll = should_scroll.clone();
+            spawn(async move {
+                while rx.changed().await.is_ok() {
+                    let count = *rx.borrow();
+                    log::info!("ui: chat list received update, total messages {count}");
+                    mc.set(count);
+                    let my_nick = st.cfg.lock().unwrap().last_nick.clone();
+                    let list = st.messages.lock().unwrap();
+                    if list.last().map_or(false, |last| last.username == my_nick) {
+                        should_scroll.set(true);
+                    }
+                }
+            });
+        });
+    }
+
+    {
+        let mut should_scroll = should_scroll.clone();
+        use_effect(move || {
+            if *should_scroll.read() {
+                should_scroll.set(false);
+                let fut = eval(
+                    "const c=document.querySelector('.chat'); if(c){ c.scrollTop=c.scrollHeight; }",
+                );
+                spawn(async move {
+                    let _ = fut.await;
+                });
+            }
+        });
+    }
+
+    let _ = msg_count();
     let list = state.messages.lock().unwrap().clone();
     let match_set: std::collections::HashSet<usize> = matches.into_iter().collect();
     rsx! {
         div { class: "list",
-            for (i, _m) in list.iter().enumerate() {
-                ChatBubble { index: i, highlighted: match_set.contains(&i) }
+            for (i, m) in list.iter().enumerate() {
+                ChatBubble { key: "{m.ts_ms}-{i}", index: i, highlighted: match_set.contains(&i) }
             }
         }
     }
 }
-
 #[component]
 fn ChatBubble(index: usize, highlighted: bool) -> Element {
     let state = runtime().0.clone();
     let list = state.messages.lock().unwrap();
     let m: &ChatMessage = &list[index];
+    let my_nick = state.cfg.lock().unwrap().last_nick.clone();
+    let is_self = m.username == my_nick;
 
     rsx! {
-        div { class: format_args!("bubble {}", if highlighted { "hl" } else { "" }),
+        div { class: format_args!("bubble {} {} fade-in",
+                                   if highlighted { "hl" } else { "" },
+                                   if is_self { "self slide-right" } else { "slide-left" }),
             div { class: "meta",
                 span { class: "user", "{m.username}" }
-                span { class: "time", "{crate::state::AppState::format_ts(m.ts_ms)}" }
             }
             div { class: "text", "{m.text}" }
+            div { class: "time", "{crate::state::AppState::format_ts(m.ts_ms)}" }
         }
     }
 }
@@ -295,7 +395,7 @@ fn FloodIndicator() -> Element {
 }
 
 #[component]
-fn SettingsDialog(on_close: EventHandler<()>) -> Element {
+fn SettingsDialog(on_close: EventHandler<()>, ui_scale: Signal<f32>) -> Element {
     let state = runtime().0.clone();
     let paths = &runtime().1;
     let work = std::sync::Arc::new(std::sync::Mutex::new(state.cfg.lock().unwrap().clone()));
@@ -309,22 +409,24 @@ fn SettingsDialog(on_close: EventHandler<()>) -> Element {
         }
     };
 
-    let ui_scale_value = format!("{}", work.lock().unwrap().ui_scale);
+    let ui_scale_value = format!("{}", ui_scale.read());
     let notifications_checked = work.lock().unwrap().notifications_enabled;
     let flood_burst_value = format!("{}", work.lock().unwrap().flood_limit_burst);
     let flood_window_value = format!("{}", work.lock().unwrap().flood_limit_window_sec);
 
     let work_for_save = work.clone();
+    let mut ui_scale_save = ui_scale.clone();
     let save = move |_| {
         let w = work_for_save.lock().unwrap().clone();
         *state.cfg.lock().unwrap() = w.clone();
+        ui_scale_save.set(w.ui_scale);
         let _ = config::save(&paths.cfg_path, &w);
         on_close.call(());
     };
 
     rsx! {
-        div { class: "modal",
-            div { class: "dialog",
+        div { class: "modal fade-in",
+            div { class: "dialog scale-in",
                 h2 { "Настройки" }
                 div { class: "grid",
                     label { "Тема" }
@@ -355,10 +457,13 @@ fn SettingsDialog(on_close: EventHandler<()>) -> Element {
                         value: "{ui_scale_value}",
                         oninput: {
                             let work = work.clone();
+                            let mut ui_scale = ui_scale.clone();
                             move |e| {
                                 if let Ok(v) = e.value().parse::<f32>() {
+                                    let clamped = v.max(0.75).min(2.0);
                                     let mut w = work.lock().unwrap();
-                                    w.ui_scale = v.max(0.75).min(2.0);
+                                    w.ui_scale = clamped;
+                                    ui_scale.set(clamped);
                                 }
                             }
                         }
@@ -372,7 +477,7 @@ fn SettingsDialog(on_close: EventHandler<()>) -> Element {
                             let work = work.clone();
                             move |e| {
                                 let mut w = work.lock().unwrap();
-                                w.notifications_enabled = e.value().parse::<bool>().unwrap_or(true);
+                                w.notifications_enabled = e.checked();
                             }
                         }
                     }
@@ -412,8 +517,8 @@ fn SettingsDialog(on_close: EventHandler<()>) -> Element {
                     }
                 }
                 div { class: "actions",
-                    button { onclick: save, class: "primary", "Сохранить" }
-                    button { onclick: move |_| on_close.call(()), "Закрыть" }
+                    button { onclick: save, class: "btn primary", "Сохранить" }
+                    button { onclick: move |_| on_close.call(()), class: "btn", "Закрыть" }
                 }
             }
         }
@@ -438,18 +543,18 @@ fn DiagnosticsDialog(on_close: EventHandler<()>) -> Element {
             state_for_copy.messages.lock().unwrap().len(),
             logs_dir_copy,
         );
-        let _ = Clipboard::new().and_then(|mut c| c.set_text(text));
+        let _ = arboard::Clipboard::new().and_then(|mut c| c.set_text(text));
     };
 
     rsx! {
-        div { class: "modal",
-            div { class: "dialog",
+        div { class: "modal fade-in",
+            div { class: "dialog scale-in",
                 h2 { "Диагностика" }
                 pre { "{status}" }
                 p { "Логи в: {logs_dir}" }
                 div { class: "actions",
-                    button { onclick: copy_diag, "Скопировать диагностику" }
-                    button { onclick: move |_| on_close.call(()), "Закрыть" }
+                    button { onclick: copy_diag, class: "btn", "Скопировать диагностику" }
+                    button { onclick: move |_| on_close.call(()), class: "btn", "Закрыть" }
                 }
             }
         }
@@ -478,7 +583,7 @@ pub fn notify_win_toast(title: &str, body: &str) -> anyhow::Result<()> {
     xml_doc.LoadXml(&windows::core::HSTRING::from(xml))?;
 
     let notifier = ToastNotificationManager::CreateToastNotifierWithId(
-        &windows::core::HSTRING::from("Defay.Client")
+        &windows::core::HSTRING::from("Defay.Client"),
     )?;
     let toast = ToastNotification::CreateToastNotification(&xml_doc)?;
     notifier.Show(&toast)?;
@@ -487,5 +592,7 @@ pub fn notify_win_toast(title: &str, body: &str) -> anyhow::Result<()> {
 
 #[cfg(windows)]
 fn escape_xml(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }

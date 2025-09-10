@@ -27,7 +27,6 @@ pub fn init_logging(paths: &Paths) -> anyhow::Result<PathBuf> {
         .write(true)
         .open(&log_path)
         .with_context(|| format!("open log file {}", log_path.display()))?;
-    // UTF-8 BOM для Notepad
     use std::io::Write;
     let _ = file.write_all(b"\xEF\xBB\xBF");
     drop(file);

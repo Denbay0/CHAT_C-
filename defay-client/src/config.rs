@@ -29,7 +29,7 @@ impl Default for AppConfig {
             last_port: 5555,
             last_nick: "".to_string(),
             auto_connect: false,
-            theme: Theme::System,
+            theme: Theme::Light,
             ui_scale: 1.0,
             notifications_enabled: true,
             flood_limit_burst: 8,
@@ -47,8 +47,8 @@ pub struct Paths {
 }
 
 pub fn paths() -> anyhow::Result<Paths> {
-    let proj =
-        ProjectDirs::from("com", "Defay", "DefayClient").ok_or_else(|| anyhow::anyhow!("Не удалось определить каталог приложения"))?;
+    let proj = ProjectDirs::from("com", "Defay", "DefayClient")
+        .ok_or_else(|| anyhow::anyhow!("Не удалось определить каталог приложения"))?;
     let app_dir = proj.config_dir().to_path_buf();
     fs::create_dir_all(&app_dir)?;
     let cfg_path = app_dir.join("config.json");

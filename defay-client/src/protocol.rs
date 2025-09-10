@@ -2,7 +2,6 @@ use byteorder::{BigEndian, ReadBytesExt};
 use bytes::{BufMut, BytesMut};
 use std::io::{Cursor, Read};
 
-/// Frame type values used in the protocol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameType {
     Hello = 0x01,
@@ -13,7 +12,6 @@ pub enum FrameType {
 }
 
 impl FrameType {
-    /// Convert from numeric tag.
     pub fn from_u8(v: u8) -> Option<Self> {
         Some(match v {
             0x01 => Self::Hello,
@@ -26,7 +24,6 @@ impl FrameType {
     }
 }
 
-/// High-level representation of protocol frames.
 #[derive(Debug, Clone)]
 pub enum Frame {
     Hello { username: String },
@@ -36,7 +33,6 @@ pub enum Frame {
     MsgBroadcast { ts_ms: u64, username: String, text: String },
 }
 
-/// Encode a frame into a BytesMut.
 pub fn encode(frame: &Frame) -> BytesMut {
     let mut payload = BytesMut::new();
     match frame {
@@ -67,7 +63,6 @@ pub fn encode(frame: &Frame) -> BytesMut {
     }
 }
 
-/// Prepend frame type and length.
 fn wrap(ft: FrameType, payload: &BytesMut) -> BytesMut {
     let mut out = BytesMut::new();
     out.put_u8(ft as u8);
@@ -76,7 +71,6 @@ fn wrap(ft: FrameType, payload: &BytesMut) -> BytesMut {
     out
 }
 
-/// Decode a frame from raw bytes.
 pub fn decode(buf: &[u8]) -> anyhow::Result<Frame> {
     if buf.len() < 5 {
         anyhow::bail!("frame too short");
